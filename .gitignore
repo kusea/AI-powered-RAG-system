@@ -1,7 +1,0 @@
-backend/.env
-backend/.env.local
-backend/.env.*.local
-backend/__pycache__/
-backend/*.pyc
-backend/*.pyo
-backend/*.pyd
