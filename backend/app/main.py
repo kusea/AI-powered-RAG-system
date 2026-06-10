@@ -17,10 +17,6 @@ async def lifespan(app: FastAPI):
     print("Initializing the database...")
 
     try:
-        from app.core.config import settings
-        db_info = settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else settings.DATABASE_URL
-        print(f"[CHECK]: FastAPI is connected to database at: {db_info}")
-        
         Base.metadata.create_all(bind = engine) # Create tables based on models
         print("Database initialized successfully.")
 

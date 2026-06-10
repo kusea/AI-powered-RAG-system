@@ -3,8 +3,8 @@ from sqlalchemy import Column, Integer, String, Text, Text, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
-from ..core.database import Base
-
+from app.core.database import Base
+from app.core.config import settings
 
 class Document(Base):
     __tablename__ = "documents"
@@ -19,6 +19,6 @@ class Document(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     # Define fixed dimension vector column
-    embedding = Column(Vector(3))
+    embedding = Column(Vector(settings.VECTOR_DIMENSION), nullable=True)
 
     user = relationship("User", back_populates="documents")

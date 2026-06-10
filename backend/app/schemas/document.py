@@ -5,14 +5,16 @@ from typing import List, Optional
 class ChunkEmbeddingBase(BaseModel):
     title: str
     content: Optional[str] = None
-    embedding: List[float] # Nhận mảng số thực từ client
     user_id: int
+    file_path: Optional[str] = None
+    file_size: Optional[int] = None
 
 class ChunkEmbeddingCreate(ChunkEmbeddingBase):
     pass
 
 class ChunkEmbeddingResponse(ChunkEmbeddingBase):
     id: int
+    embedding: Optional[List[float]] = None
 
     class Config:
         from_attributes = True

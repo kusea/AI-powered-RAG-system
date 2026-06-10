@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     PORT: str = os.getenv("DB_PORT")
     DATABASE_URL: str = f"postgresql://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}"
 
+    VECTOR_DIMENSION: int = os.getenv("DIMENSION")
+
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()

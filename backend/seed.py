@@ -2,60 +2,73 @@
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine, Base
 from app.models.user import User
-from app.models.document import Document
 
-def seed_data():
+from app.services import document_service
+from app.schemas.document import ChunkEmbeddingCreate
+
+def seed_user():
     db: Session = SessionLocal()
     
-    # Kiểm tra nếu đã có dữ liệu thì không seed lại, tránh trùng lặp
+    # 1. Check if there are already users in the database to avoid duplicate seeding
     if db.query(User).first() is not None:
-        print("Database đã có dữ liệu mẫu từ trước. Hủy seeding!")
+        print("There are already users in the database. Skipping seeding.")
         db.close()
         return
 
-    print("Đang khởi tạo dữ liệu mẫu...")
+    print("Initializing sample data...")
 
-    # 1. Tạo danh sách 5 Users mẫu nhanh
+    # 2. Create sample users
     users = [
         User(username="admin", email="admin@rag.io", hashed_password="hashed_password_123", is_active=True),
         User(username="developer_bk", email="dev_bk@gmail.com", hashed_password="hashed_password_456", is_active=True),
         User(username="test_user", email="test@gmail.com", hashed_password="hashed_password_789", is_active=True)
     ]
     db.add_all(users)
-    db.commit() # Commit để sinh ra ID cho các User trước
+    db.commit()
 
-    # 2. Tạo danh sách Documents mẫu liên kết với các User trên
-    documents = [
-        Document(
-            title="Hướng dẫn học Python cho người mới",
-            content="Python là ngôn ngữ lập trình mạnh mẽ, dễ học và phổ biến bậc nhất.",
+def seed_document():
+    
+    db: Session = SessionLocal()
+
+    users = db.query(User).all()
+    if not users:
+        print("No users found in the database. Please seed users first.")
+        db.close()
+        return
+
+    print("Initializing sample data...")
+    # 2. Create sameple documents associated with the created users
+    raw_documents = [
+        ChunkEmbeddingCreate(
+            title="Guiding for Python Beginners",
+            content="Python is a powerful, easy-to-learn, and widely popular programming language.",
             file_path="/storage/docs/python_basic.txt",
             file_size=1024,
-            user_id=users[1].id, # Gắn trực tiếp với ID của developer_bk
-            embedding=[0.85, 0.15, 0.05]
+            user_id=users[1].id,
         ),
-        Document(
-            title="Kinh nghiệm quản lý vốn khởi nghiệp",
-            content="Đầu tư ban đầu cần tập trung tối ưu hóa sản phẩm thay vì đốt tiền marketing.",
+        ChunkEmbeddingCreate(
+            title="Startup Funding Strategies",
+            content="Initial funding requires focusing on product optimization rather than burning marketing money.",
             file_path="/storage/docs/startup_fund.txt",
             file_size=4050,
-            user_id=users[0].id, # Gắn với admin
-            embedding=[0.10, 0.90, 0.12]
+            user_id=users[0].id,
         ),
-        Document(
-            title="Phương pháp thiền giảm stress công việc",
-            content="Dành ra 10 phút tập trung vào hơi thở vào buổi sáng sẽ cải thiện sự tập trung.",
+        ChunkEmbeddingCreate(
+            title="Meditation Techniques for Stress Relief",
+            content="Dedicating 10 minutes each morning to focus on your breathing can significantly improve concentration.",
             file_path="/storage/docs/meditation.txt",
             file_size=1500,
-            user_id=users[2].id, # Gắn với test_user
-            embedding=[0.05, 0.05, 0.95]
+            user_id=users[2].id,
         )
     ]
-    
-    db.add_all(documents)
+
+    for doc in raw_documents:
+        document_service.save_chunks_embeddings(db, doc)
+
     db.commit()
     db.close()
-    print("Seeding hoàn tất thành công!")
+    print("Seeding completed successfully!")
 
 if __name__ == "__main__":
-    seed_data()
+    seed_user()
+    seed_document()
