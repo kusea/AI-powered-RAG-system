@@ -15,7 +15,7 @@ class Document(Base):
     file_path = Column(String(255), nullable=True) # Optional: Store file path if needed
     file_size = Column(Integer, nullable = True)
 
-    user_id = Column(Integer, ForeignKey("users.id", on_delete = "CASCADE"), nullable = False) # Foreign key to associate with User
+    user_id = Column(Integer, ForeignKey("users.id", ondelete = "CASCADE"), nullable = False) # Foreign key to associate with User
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     # Define fixed dimension vector column
