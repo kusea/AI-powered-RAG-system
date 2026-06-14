@@ -3,7 +3,7 @@ import {authApi} from "@/services/authAPI";
 import {useRouter} from "next/router";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
-import {LayoutDashboard, Lock, Mail, Loader2, User} from "lucide-react";
+import {LayoutDashboard, Lock, Mail, Loader2, User, Eye, EyeOff} from "lucide-react";
 import Link from "next/link";
 import axios from "axios";
 
@@ -11,6 +11,7 @@ export default function Signup() {
     const [email, setEmail] = useState("");
     const [username, setUserName] = useState("");
     const [password, setPassword] = useState("");
+    const [showPass, setShowPass] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const router = useRouter();
@@ -23,7 +24,7 @@ export default function Signup() {
         try{
             const data = await authApi.register({email, password, username});
             localStorage.setItem("token", data.access_token);
-            router.push("/chat");
+            router.push("/dashboard");
         } catch(err: unknown){
             if (axios.isAxiosError(err) && err.response?.data) {
                 const detail = err.response?.data.detail;
@@ -96,13 +97,20 @@ export default function Signup() {
                 <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
                 <Input
-                    type="password"
+                    type={showPass ? "text" : "password"}
                     placeholder="Minimum 8 characters"
-                    className="pl-10"
+                    className="pl-10 pr-10"
                     value={password}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                     required
                 />
+                <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    className="absolute right-2 top-2 h-4 w-4 text-zinc-500 dark:text-zinc-400 transition-colors"
+                >
+                    {showPass ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
                 </div>
             </div>
 

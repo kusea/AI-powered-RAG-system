@@ -4,7 +4,7 @@ import { authApi } from "@/services/authAPI";
 import { useRouter } from "next/router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LayoutDashboard, Lock, Mail, Loader2 } from "lucide-react";
+import { LayoutDashboard, Lock, Mail, Loader2, Eye, EyeOff} from "lucide-react";
 import Link from "next/link";
 import axios from "axios";
 
@@ -12,6 +12,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [showPass, setShowPass] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
 
@@ -24,7 +25,7 @@ export default function LoginPage() {
     try {
       const data = await authApi.login({ email, password });
       localStorage.setItem("token", data.access_token);
-      void router.push("/chat"); 
+      void router.push("/dashboard"); 
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.data) {
         const detail = err.response.data.detail;
@@ -47,7 +48,7 @@ export default function LoginPage() {
     try {
       const data = await authApi.loginWithGoogle(credentialResponse.credential);
       localStorage.setItem("token", data.access_token);
-      void router.push("/chat");
+      void router.push("/dashboard");
     } catch (err: unknown) {
       setError("Google authentication failed on server.");
     } finally {
@@ -99,13 +100,19 @@ export default function LoginPage() {
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
                 <Input
-                  type="password"
+                  type={showPass ? "text" : "password"}
                   placeholder="••••••••"
-                  className="pl-10"
+                  className="pl-10 pr-10"
                   value={password}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                   required
                 />
+                <button 
+                  type="button"
+                  className = "absolute right-2 top-2 text-zinc-400 hover:text-zinc-500 dark:hover:text-zinc-300 transition-colors" 
+                  onClick={() => setShowPass(!showPass)}>
+                    {showPass ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  </button>
               </div>
             </div>
 
@@ -124,16 +131,15 @@ export default function LoginPage() {
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={() => setError("Google login failed")}
-              useOneTap
               theme="outline"
-              width="100%"
+              width="400"
             />
           </div>
 
           <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
             Don&apos;t have an account?{" "}
             <Link href="/signup" className="font-semibold text-zinc-900 dark:text-zinc-50 hover:underline">
-              Sign up for free
+              Sign up here
             </Link>
           </p>
         </div>
