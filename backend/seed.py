@@ -5,6 +5,7 @@ from app.models.user import User
 
 from app.services import document_service
 from app.schemas.document import ChunkEmbeddingCreate
+from app.core.security import hash_password
 
 def seed_user():
     db: Session = SessionLocal()
@@ -18,10 +19,12 @@ def seed_user():
     print("Initializing sample data...")
 
     # 2. Create sample users
+    password = ["123abc45", "04567890", "123456789"]
+    hashed_pass = [hash_password(p) for p in password]
     users = [
-        User(username="admin", email="admin@rag.io", hashed_password="hashed_password_123", is_active=True),
-        User(username="developer_bk", email="dev_bk@gmail.com", hashed_password="hashed_password_456", is_active=True),
-        User(username="test_user", email="test@gmail.com", hashed_password="hashed_password_789", is_active=True)
+        User(id = 1, username="admin", email="admin@rag.io", password=password[0], is_active=0, hashed_password=hashed_pass[0]),
+        User(id = 2, username="developer_bk", email="dev_bk@gmail.com", password=password[1], is_active=0, hashed_password=hashed_pass[1]),
+        User(id = 3, username="test_user", email="test@gmail.com", password=password[2], is_active=0, hashed_password=hashed_pass[2]),
     ]
     db.add_all(users)
     db.commit()

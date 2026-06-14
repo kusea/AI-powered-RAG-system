@@ -1,8 +1,15 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import jwt
+from jose import jwt, JWTError
 from app.core.config import settings
 from passlib.context import CryptContext
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.models.user import User
+from app.schemas.auth import TokenResponse
 
 pwd_context = CryptContext(schemes = ["bcrypt"], deprecated = "auto")
 
@@ -18,3 +25,34 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+
+# Dependency to get user from token in header
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        jwt_decode = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str = jwt_decode.get("sub")
+        if not user_id: 
+            print ("Username not found in token")
+            raise credentials_exception
+    except JWTError:
+        print ("Invalid token")
+        raise credentials_exception
+    
+    print(f"decoded token: {jwt_decode}")
+    print(f"Token: {token}")
+    print(f"Username: {user_id}")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        print ("User not found in database")
+        raise credentials_exception
+
+    return user

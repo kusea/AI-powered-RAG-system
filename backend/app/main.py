@@ -7,10 +7,11 @@ from app.models.document import Document
 from app.schemas import document
 from app.core.database import Base, engine
 from app.models.user import User
+from app.models.user_account import UserAccount
 
 from app.api.v1 import chat, documents, auth
 
-__all__ = ["app", "Base", "Document", "User"]
+__all__ = ["app", "Base", "Document", "User", "UserAccount"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,9 +29,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title = "SaaS RAG System", version = "1.0.0", lifespan = lifespan)
 
+origin_fe = ["http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = ["*"],
+    allow_origins = origin_fe,
     allow_methods = ["*"],
     allow_headers = ["*"],
     allow_credentials = True
