@@ -40,3 +40,14 @@ export const uploadDocumentAPI = async ({file, onProgress}: {file: File, onProgr
 
     return res.data; 
 }
+
+// Solve the case if user's token is expired
+axios.interceptors.response.use((response) => response, (error) => {
+    if (error.response && error.response.status === 401) {
+        console.warn("Token is expired or invalid. Please login again.");
+        localStorage.removeItem("token");
+        if (typeof window !== "undefined" && window.location.pathname !== "/login") 
+            window.location.href = "/login";
+    } 
+    return Promise.reject(error);
+})

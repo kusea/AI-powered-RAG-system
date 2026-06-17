@@ -4,6 +4,7 @@ import {useRouter} from "next/router";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {LayoutDashboard, Lock, Mail, Loader2, User, Eye, EyeOff} from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import axios from "axios";
 
@@ -15,6 +16,7 @@ export default function Signup() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const router = useRouter();
+    const queryClient = useQueryClient();
 
     const handleRegister: React.ComponentProps<"form">["onSubmit"] = async (e)=>{
         e.preventDefault();
@@ -23,7 +25,11 @@ export default function Signup() {
 
         try{
             const data = await authApi.register({email, password, username});
+
             localStorage.setItem("token", data.access_token);
+            queryClient.setQueryData(["authToken"], data.access_token);
+            queryClient.invalidateQueries({queryKey: ["documents"]});
+            
             router.push("/dashboard");
         } catch(err: unknown){
             if (axios.isAxiosError(err) && err.response?.data) {

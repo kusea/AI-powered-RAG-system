@@ -8,6 +8,7 @@ from app.schemas import document
 from app.core.database import Base, engine
 from app.models.user import User
 from app.models.user_account import UserAccount
+from app.middlewares.rate_limiter import RateLimitMiddleware
 
 from app.api.v1 import chat, documents, auth
 
@@ -30,6 +31,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title = "SaaS RAG System", version = "1.0.0", lifespan = lifespan)
 
 origin_fe = ["http://localhost:3000"]
+
+app.add_middleware(RateLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

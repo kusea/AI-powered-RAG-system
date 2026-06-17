@@ -1,15 +1,17 @@
 import React, { useState } from "react";
 import { GoogleOAuthProvider, GoogleLogin, CredentialResponse } from "@react-oauth/google";
-import { authApi } from "@/services/authAPI";
+import { authApi} from "@/services/authAPI";
 import { useRouter } from "next/router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LayoutDashboard, Lock, Mail, Loader2, Eye, EyeOff} from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import axios from "axios";
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [showPass, setShowPass] = useState<boolean>(false);
@@ -24,8 +26,12 @@ export default function LoginPage() {
     
     try {
       const data = await authApi.login({ email, password });
+
       localStorage.setItem("token", data.access_token);
-      void router.push("/dashboard"); 
+      queryClient.setQueryData(["authToken"], data.access_token);
+      queryClient.invalidateQueries({queryKey: ["documents"]});
+
+      router.push("/dashboard"); 
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.data) {
         const detail = err.response.data.detail;
@@ -47,8 +53,12 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const data = await authApi.loginWithGoogle(credentialResponse.credential);
+
       localStorage.setItem("token", data.access_token);
-      void router.push("/dashboard");
+      queryClient.setQueryData(["authToken"], data.access_token);
+      queryClient.invalidateQueries({queryKey: ["documents"]});
+
+      router.push("/dashboard");
     } catch (err: unknown) {
       setError("Google authentication failed on server.");
     } finally {

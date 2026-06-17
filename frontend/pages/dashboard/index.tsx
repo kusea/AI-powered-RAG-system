@@ -2,9 +2,11 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert} from "lucide-react";
 import { uploadDocumentAPI, fetchDocumentAPI } from "@/services/documentAPI";
-
+import { getAuthToken } from "@/services/authAPI";
+import { useRouter } from "next/router";
+import axios from "axios";
 
 interface DocumentItem {
     id: number;
@@ -16,10 +18,18 @@ interface DocumentItem {
 
 export default function Dashboard(){
     const queryClient = useQueryClient();
+    const router = useRouter();
 
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-    const [uploadStatus, setUploadStatus] = useState<{ "type": "success" | "error", "message": string } | null>(null);
+    const [uploadStatus, setUploadStatus] = useState<{ "type": "success" | "error" | "warning", "message": string } | null>(null);
 
+    const {data: token} = useQuery({
+        queryKey: ["authToken"], 
+        queryFn: getAuthToken,
+        staleTime: Infinity
+    });
+
+    const isHasToken = !!token;
     // Use useQuery to manage documents data
     const { data: documents = [], isLoading: isDocsLoading, isError: isDocsError } = useQuery<DocumentItem[]>({
         queryKey: ["documents"],
@@ -34,7 +44,14 @@ export default function Dashboard(){
             setTimeout(() => setUploadProgress(null), 3000);
         },
         onError: (error) => {
-            setUploadStatus({ type: "error", message: `Failed to upload file. ${error}` });
+            let message: string = "";
+            if (axios.isAxiosError(error)) {
+                const status = error.response?.status;
+                if (status === 429) message = "Rate limit exceeded. Please try again later.";
+                else message = `An error occurred while uploading "${error.response?.data.message || error.message}".`;
+            } else if (error instanceof Error) message = `An error occurred while uploading "${error.message}".`;
+            else message = "An unknown error occurred.";
+            setUploadStatus({ type: "error", message: message });
             setUploadProgress(null);
         }
     })
@@ -42,6 +59,12 @@ export default function Dashboard(){
     // Solving the drop files logic
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
+
+        // Check whether user is authenticated or not by checking token
+        if (!token) {
+            setUploadStatus({ type: "warning", message: "You must be logged in to upload files." });
+            return;
+        }
 
         const file = acceptedFiles[0];
         setUploadProgress(0);
@@ -51,7 +74,7 @@ export default function Dashboard(){
             file,
             onProgress: (percent) => setUploadProgress(percent)
         })
-    }, [uploadMutation])
+    }, [uploadMutation, token]);
 
     // Helper function to format files' size
     const formatFileSize = (bytes: number | null, decimals = 2) => {
@@ -131,11 +154,17 @@ export default function Dashboard(){
 
 
             {/* Upload Status */}
-            {uploadStatus && (
+            {uploadStatus && isHasToken && (
                 <div className = {`mt-4 p-4 rounded-lg flex gap-3 items-start border
-                    ${uploadStatus.type === "success" ? "bg-emerald-500/20 border-emerald-500/20 text-emerald-600" : "bg-destructive/20 border-destructive/20 text-destructive"}`}>
+                    ${uploadStatus.type === "success" ? 
+                    "bg-emerald-500/20 border-emerald-500/20 text-emerald-600" 
+                    : uploadStatus.type === "error" ?
+                    "bg-amber-500/20 border-amber-500/20 text-amber-600"
+                    : "bg-destructive/20 border-destructive/20 text-destructive"}`}>
                         {uploadStatus.type === "success" ? (
                             <CheckCircle className = "h-5 w-5 mt-0.5 shrink-0" />
+                        ) : uploadStatus.type === "warning" ? (
+                            <ShieldAlert className = "h-5 w-5 mt-0.5 shrink-0" />
                         ) : (
                             <AlertCircle className = "h-5 w-5 mt-0.5 shrink-0" />
                         )}
@@ -147,7 +176,11 @@ export default function Dashboard(){
             {/* Document List */}
             <div className = "mt-10">
                 <h2 className = "text-xl font-semibold mb-4 flex items-center gap-2">Your Documents</h2>
-                { isDocsLoading ? (
+                { !isHasToken ? (
+                    <div className="text-center py-12 border rounded-xl bg-destructive/5 border-destructive/20 text-destructive">
+                        You must login to view your documents.
+                    </div>
+                ) : isDocsLoading ? (
                     <div className="flex flex-col items-center justify-center py-12 border round-xl bg-muted/10">
                         <Loader2 className="h-6 w-6 animate-spin text-primary mb-2" />
                         <p className="text-sm text-muted-foreground">Loading...</p>

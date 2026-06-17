@@ -14,25 +14,26 @@ router = APIRouter()
 
 @router.post("/register", response_model=TokenResponse)
 def register(user: UserRegister, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == user.email).first()
-    if not user:
-        user = User(email=user.email, username = user.username, password = user.password)
-
-    direct_account = db.query(UserAccount).filter(UserAccount.user_id == user.id and UserAccount.provider == "direct").first()
-    if direct_account:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This account has been registered already.")
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
+        accounts = db.query(UserAccount).filter(UserAccount.user_id == existing_user.id).all()
+        if filter(lambda a: a.provider == "direct", accounts):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This account is registered")
+        direct_account = UserAccount(user_id=existing_user.id, provider="direct", provider_id=user.email)
+        existing_user.accounts.append(direct_account)
+        db.add(direct_account)
+        db.commit()
     else:
-        direct_account = UserAccount(user_id=user.id, provider="direct", provider_id=None)
-
-    user.accounts.append(direct_account)
-
-    db.add(user)
+        new_user = User(email=user.email, username=user.username, password=user.password, hashed_password=hash_password(user.password))
+        direct_account = UserAccount(provider="direct", provider_id=user.email)
+        new_user.accounts.append(direct_account)
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        db.refresh(direct_account)
     
-    db.commit()
-    db.refresh(user)
-    db.refresh(direct_account)
-
-    access_token = create_access_token(data={"sub": str(user.id)})
+    db_user = db.query(User).filter(User.email == user.email).first() # Take the value saved in the database after refresh
+    access_token = create_access_token(data={"sub": str(db_user.id)})
     return TokenResponse(access_token=access_token, token_type="bearer")
 
 @router.post("/login", response_model=TokenResponse)
@@ -65,18 +66,22 @@ def google_login(request: GoogleLoginRequest, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.email == email).first()
     if not user:
-        user = User(email=email, username=username, password=None)
+        user = User(email=email, username=username)
+        google_account = UserAccount(provider="google", provider_id=id_info["sub"])
+        user.accounts.append(google_account)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.refresh(google_account)
+    else:
+        has_google = any(account.provider == "google" for account in user.accounts)
+        if not has_google:
+            google_account = UserAccount(provider="google", provider_id=id_info["sub"])
+            user.accounts.append(google_account)
+            db.add(google_account)
+            db.commit()
+            db.refresh(google_account)
 
-    google_account = db.query(UserAccount).filter(UserAccount.user_id == user.id and UserAccount.provider == "google").first()
-    if not google_account:
-        google_account = UserAccount(user_id=user.id, provider="google", provider_id=id_info.get("sub"))
-    
-    user.accounts.append(google_account)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    db.refresh(google_account)
-
-
+    user = db.query(User).filter(User.email == email).first() # Take the value saved in the database after refresh
     access_token = create_access_token(data={"sub": str(user.id)})
     return TokenResponse(access_token=access_token, token_type="bearer")

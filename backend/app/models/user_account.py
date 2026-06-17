@@ -10,4 +10,4 @@ class UserAccount(Base):
     provider = Column(String(255), nullable = False)
     provider_id = Column(String(255), nullable = True)
 
-    user = relationship("User", back_populates = "user_accounts")
+    user = relationship("User", back_populates = "accounts")

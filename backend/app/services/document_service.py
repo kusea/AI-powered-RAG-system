@@ -31,7 +31,7 @@ def save_chunks_embeddings(db: Session, item: ChunkEmbeddingCreate):
     return db_item
 
 # Upload file
-UPLOAD_DIR = "backend/storage"
+UPLOAD_DIR = "storage"
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)

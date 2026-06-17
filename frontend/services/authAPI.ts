@@ -19,3 +19,7 @@ export const authApi = {
     login: (data: Record<string, string>): Promise<TokenResponse> => api.post("/auth/login", data).then(res => res.data),
     loginWithGoogle: (token: string): Promise<TokenResponse> => api.post("/auth/google-login", {token}).then(res => res.data)
 }
+
+export const getAuthToken = () => {
+    return (typeof window !== "undefined") ? localStorage.getItem("token") : null;
+}
