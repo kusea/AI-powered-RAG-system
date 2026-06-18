@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from app.models.document import Document
+from app.models import Document
 from app.core.config import settings
 from sentence_transformers import SentenceTransformer
 from typing import List

@@ -1,7 +1,7 @@
 # seed.py
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine, Base
-from app.models.user import User
+from app.models import User
 
 from app.services import document_service
 from app.schemas.document import ChunkEmbeddingCreate

@@ -5,8 +5,7 @@ from google.auth.transport import requests
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.user import User
-from app.models.user_account import UserAccount
+from app.models import User, UserAccount
 from app.core.security import hash_password, verify_password, create_access_token
 from app.schemas.auth import UserRegister, UserLogin, TokenResponse, GoogleLoginRequest
 

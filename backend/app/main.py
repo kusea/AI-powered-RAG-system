@@ -3,11 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.models.document import Document
+from app.models import Document, User, UserAccount
 from app.schemas import document
 from app.core.database import Base, engine
-from app.models.user import User
-from app.models.user_account import UserAccount
+
 from app.middlewares.rate_limiter import RateLimitMiddleware
 
 from app.api.v1 import chat, documents, auth
