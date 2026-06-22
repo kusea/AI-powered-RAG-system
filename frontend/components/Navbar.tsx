@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient} from "@tanstack/react-query";
 import { useRouter } from "next/router";
-import { User, LogOut, Settings, Trash2} from "lucide-react";
+import { User, LogOut, Settings, Trash2, Database, MessageSquare } from "lucide-react";
 import { Button } from "./ui/button";
 
 import { getAuthToken } from "../services/authAPI";
@@ -15,7 +15,7 @@ export default function NavBar() {
     const {data: token} = useQuery({
         queryKey: ["authToken"],
         queryFn: getAuthToken,
-        staleTime: Infinity
+        staleTime: 0
     });
 
     const isLoggedIn = !!token;
@@ -32,11 +32,20 @@ export default function NavBar() {
                         top-0 z-50 px-6 py-3 items-center justify-between flex">
             <div className="flex items-center space-x-2 cursor-pointer"
                 onClick={() => router.push("/dashboard")}>
-                <div className="bg-primary text-primary-foreground p-1.5 rounded-lg font-bold text-sm">
-                    RAG System
-                </div>
-                <span className="font-bold hidden sm:inline-block">AI knowledge Hub</span>
+                <Database className="h-6 w-6 text-primary"/>
+                <span className="font-bold hidden sm:inline-block">RAG knowledge Hub</span>
             </div>
+
+            <div className="h-4 w-px bg-muted-foreground/30" />
+
+            <Link href="/chat" passHref>
+                <Button variant={router.pathname === "/chat" ? "default" : "ghost"} className="gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    AI Assistant
+                </Button>
+            </Link>
+
+            <div className="h-4 w-px bg-muted-foreground/30" />
 
             <div className="flex items-center space-x-4 justify-end relative">
                 {!isLoggedIn ? (

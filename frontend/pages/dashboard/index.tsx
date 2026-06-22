@@ -2,10 +2,9 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert} from "lucide-react";
+import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Link} from "lucide-react";
 import { uploadDocumentAPI, fetchDocumentAPI } from "@/services/documentAPI";
 import { getAuthToken } from "@/services/authAPI";
-import { useRouter } from "next/router";
 import axios from "axios";
 
 interface DocumentItem {
@@ -18,7 +17,6 @@ interface DocumentItem {
 
 export default function Dashboard(){
     const queryClient = useQueryClient();
-    const router = useRouter();
 
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [uploadStatus, setUploadStatus] = useState<{ "type": "success" | "error" | "warning", "message": string } | null>(null);
@@ -26,7 +24,7 @@ export default function Dashboard(){
     const {data: token} = useQuery({
         queryKey: ["authToken"], 
         queryFn: getAuthToken,
-        staleTime: Infinity
+        staleTime: 0
     });
 
     const isHasToken = !!token;
@@ -41,7 +39,7 @@ export default function Dashboard(){
         onSuccess: (data, variables) => {
             setUploadStatus({ type: "success", message: `Sucessfully uploaded "${variables.file.name}"` });
             queryClient.invalidateQueries({queryKey: ["documents"]});
-            setTimeout(() => setUploadProgress(null), 3000);
+            setTimeout(() => setUploadProgress(null), 1000);
         },
         onError: (error) => {
             let message: string = "";
@@ -49,7 +47,7 @@ export default function Dashboard(){
                 const status = error.response?.status;
                 if (status === 429) message = "Rate limit exceeded. Please try again later.";
                 else message = `An error occurred while uploading "${error.response?.data.message || error.message}".`;
-            } else if (error instanceof Error) message = `An error occurred while uploading "${error.message}".`;
+            } else if (error instanceof Error) message = `An error occurred while uploading (not Axios) "${error.message}".`;
             else message = "An unknown error occurred.";
             setUploadStatus({ type: "error", message: message });
             setUploadProgress(null);
@@ -62,7 +60,7 @@ export default function Dashboard(){
 
         // Check whether user is authenticated or not by checking token
         if (!token) {
-            setUploadStatus({ type: "warning", message: "You must be logged in to upload files." });
+            setUploadStatus({ type: "warning", message: "You must log in to upload files." });
             return;
         }
 
@@ -146,8 +144,7 @@ export default function Dashboard(){
                         <span>{uploadProgress}%</span>
                     </div>
                     <div className = "w-full bg-muted rounded-full h-2.5 overflow-hidden">
-                        <div className = "bg-primary h-2.5 rounded-full transition-all duration-300"
-                            style={{ width: `${uploadProgress}%` }}></div>
+                        <div className = {`bg-primary h-2.5 rounded-full transition-all duration-300 w-${uploadProgress}`}></div>
                     </div>
                 </div>
             )}
@@ -158,7 +155,7 @@ export default function Dashboard(){
                 <div className = {`mt-4 p-4 rounded-lg flex gap-3 items-start border
                     ${uploadStatus.type === "success" ? 
                     "bg-emerald-500/20 border-emerald-500/20 text-emerald-600" 
-                    : uploadStatus.type === "error" ?
+                    : uploadStatus.type === "warning" ?
                     "bg-amber-500/20 border-amber-500/20 text-amber-600"
                     : "bg-destructive/20 border-destructive/20 text-destructive"}`}>
                         {uploadStatus.type === "success" ? (
@@ -208,6 +205,14 @@ export default function Dashboard(){
                                         Size: {formatFileSize(doc.file_size)} • Uploaded: {new Date(doc.created_at).toLocaleDateString("vi-VN")}
                                         </p>
                                     </div>
+                                </div>
+                                <div className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                    <Link href={`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`}>
+                                        <Button size="sm" variant = "outline" className="text-amber-500 hover:text-amber-600 border-amber-500/30 gap-1">
+                                            <MessageSquare className="h-4 w-4" />
+                                            Ask AI
+                                        </Button>
+                                    </Link>
                                 </div>
                                 <Button className="self-center-safe md:self-center md:mt-0" variant = "outline" size = "sm">
                                     Details

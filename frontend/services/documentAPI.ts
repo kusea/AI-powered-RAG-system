@@ -24,21 +24,25 @@ export const uploadDocumentAPI = async ({file, onProgress}: {file: File, onProgr
     formData.append("file", file);
 
     const token = localStorage.getItem("token"); // get token from local storage after user login
-    
-    const res = await api.post("/documents/upload", formData, {
-        headers: {
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-        },
-        onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-                const percentCompleted = Math.round((progressEvent.loaded*100)/progressEvent.total);
-                onProgress(percentCompleted);
+    try{
+        const res = await api.post("/documents/upload", formData, {
+            headers: {
+                "Content-Type": "multipart/form-data",
+                "Authorization": `Bearer ${token}`
+            },
+            onUploadProgress: (progressEvent) => {
+                if (progressEvent.total) {
+                    const percentCompleted = Math.round((progressEvent.loaded*100)/progressEvent.total);
+                    onProgress(percentCompleted);
+                }
             }
-        }
-    })
+        })
+        return res.data;
+    } catch(err) {
+        console.error("Error uploading file:", err);
+    }
 
-    return res.data; 
+    
 }
 
 // Solve the case if user's token is expired

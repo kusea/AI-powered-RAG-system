@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
-from app.schemas.chat import ChatQueryRequest
+from app.schemas.chat import ChatQueryRequest, ChatQueryStream
 from app.services import rag_service
 from app.schemas.document import ChunkEmbeddingResponse
+
 
 router = APIRouter()
 
@@ -12,3 +14,10 @@ router = APIRouter()
 @router.post("/search", response_model = List[ChunkEmbeddingResponse])
 def search_vector(request: ChatQueryRequest, db: Session = Depends(get_db)): 
     return rag_service.search_similar_embeddings(db, request.query, request.limit)
+
+@router.post("query")
+async def query(request: ChatQueryStream, db: Session = Depends(get_db)):
+    return StreamingResponse(
+        rag_service.generate_chat_stream(db, request.query, request.document_ids),
+        media_type = "text/event-stream"
+    ) 

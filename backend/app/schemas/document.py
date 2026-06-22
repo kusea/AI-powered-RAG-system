@@ -4,11 +4,12 @@ from typing import List, Optional
 from datetime import datetime
 
 class ChunkEmbeddingBase(BaseModel):
-    title: str
+    title: Optional[str] = None
     content: Optional[str] = None
-    user_id: int
+    user_id: Optional[int] = None
     file_path: Optional[str] = None
     file_size: Optional[int] = None
+    document_id: Optional[int] = None
 
 class ChunkEmbeddingCreate(ChunkEmbeddingBase):
     pass
@@ -28,9 +29,7 @@ class DocumentResponse(BaseModel):
     file_size: Optional[int] = None
     user_id: int
     created_at: datetime
+    embedding: Optional[List[float]] = None
 
     class Config: 
         from_attributes = True
-
-class DocumentListResponse(BaseModel):
-    documents: List[DocumentResponse]

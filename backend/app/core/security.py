@@ -48,8 +48,6 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
         raise credentials_exception
     
     print(f"decoded token: {jwt_decode}")
-    print(f"Token: {token}")
-    print(f"Username: {user_id}")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         print ("User not found in database")
