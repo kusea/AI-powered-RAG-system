@@ -54,7 +54,12 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 @router.post("/google-login", response_model=TokenResponse)
 def google_login(request: GoogleLoginRequest, db: Session = Depends(get_db)):
     try:
-        id_info = id_token.verify_oauth2_token(request.token, requests.Request(), settings.GOOGLE_CLIENT_ID)
+        id_info = id_token.verify_oauth2_token(
+            request.token, 
+            requests.Request(), 
+            settings.GOOGLE_CLIENT_ID,
+            clock_skew_in_seconds = 60
+        )
         email = id_info.get("email")
         username = id_info.get("name", "")
 

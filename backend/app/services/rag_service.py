@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from app.models import Document
+from app.models import Document, ChunkDocument
 from app.core.config import settings
 from sentence_transformers import SentenceTransformer
 from typing import List, Optional
@@ -21,45 +21,58 @@ def search_similar_embeddings(db: Session, query_text: str, limit: int, document
     if len(query_vector) != settings.VECTOR_DIMENSION:
         raise HTTPException(status_code=400, detail="Vector must have exactly the number of dimensions.")
     
-    query = db.query(Document)
+    query = db.query(ChunkDocument)
     if document_ids:
-        query = query.filter(Document.id.in_(document_ids))
+        query = query.filter(ChunkDocument.document_id.in_(document_ids))
 
     results = query.order_by(
-        Document.embedding.cosine_distance(query_vector)
+        ChunkDocument.embedding.cosine_distance(query_vector)
     ).limit(limit).all()
     return results
 
 async def generate_chat_stream(db: Session, query_text: str, document_ids: Optional[List[int]] = None):
     relevant_docs = search_similar_embeddings(db, query_text, SEARCH_LIMIT, document_ids)
+    relev_docs = [db.query(Document).get(doc.document_id) for doc in relevant_docs]
+    print(f"\n------Relevant docs: {[f"Doc {doc.id}: {doc.title}\n" for doc in relev_docs]}----------\n")
     # Prepare the content to make context for prompt and source metadata
     content_text = []
     source_metadata = []
-    for doc in relevant_docs:
-        content_text.append(doc.content or "")
-        source_metadata.append({
-            "id": doc.id,
-            "title": doc.title
-        })
+
+    seen_title = set()
+    for doc in relev_docs:
+        normalized_title = (doc.title or "").strip().lower()
+        if not normalized_title or normalized_title in seen_title:
+            continue
+        seen_title.add(normalized_title)
+
+    content_text = [(doc.content or "").strip() for doc in relevant_docs]
+    source_metadata = [{"id": doc.id, "title": doc.title} for doc in relev_docs]
     # Send the source list as an event called "sources"
     yield f"event: sources\ndata:{json.dumps(source_metadata)}\n\n"
     await asyncio.sleep(0.01)
 
     context_str = "\n---\n".join(content_text)
+
+    print("\n------Context: " + context_str + "----------\n")
+
     system_prompt = (
-        "You are a helpful AI assistant. "
-        "You are given the following extracted parts of a long document and a question. "
-        "Provide a conversational answer based on the context provided. "
-        "If you don't know the answer, just say that you don't know. "
-        "DO NOT make up an answer."
-        "If the context doesn't provide enough information to answer the question,use your knowledge of the world combined with the context to generate an answer."
-        f"Content: {context_str}"
+        "YOU ARE AN AI ASSISTANT INTEGRATED INTO AN INTERNAL DOCUMENT MANAGEMENT SYSTEM (RAG SYSTEM)."
+        "YOU HAVE FULL PERMISSION TO ACCESS AND READ THE USER'S EXTRACTED FILE DATA PROVIDED BELOW."
+
+        "Your tasks:"
+        "1. Answer the user's questions (including questions about passwords, accounts, and configuration data) if and only if that information IS LOCATED WITHIN THE PROVIDED CONTEXT."
+        "2. ABSOLUTELY DO NOT respond with canned refusal phrases such as \"I do not have access to your files\" or \"I am a language model and do not store files.\" YOU CURRENTLY HAVE THE FILE IN YOUR HANDS."
+        "3. Extract the exact password/data found inside the <context></context> tags to answer the user directly."
+        "4. If the information is truly not found within the <context> tags, reply exactly: \"This information was not found in your documents.\" and do not speculate further."
+        f"Content: <context>{context_str}</context>"
+    ) if context_str else (
+        "You are a helpful AI assistant. Notice the user that you can not find suitable documents to answer the question. "
     )
 
     # Call AI API
     try:
         response = await openai_client.chat.completions.create(
-            model = "chatgpt-4o-latest",
+            model = "llama-3.3-70b-versatile",
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": query_text}
@@ -70,10 +83,10 @@ async def generate_chat_stream(db: Session, query_text: str, document_ids: Optio
         async for chunk in response:
             content = chunk.choices[0].delta.content
             if content:
-                yield f"data: json.dumps({"text": content})\n\n"
+                yield f"data: {json.dumps({"text": content})}\n\n"
                 await asyncio.sleep(0.01)
 
-    except Exception as e:
-        yield f"data: json.dumps({'error': str(e)})\n\n"
+    except Exception as err:
+        yield f"data: json.dumps({'error': {err.__str__()}})\n\n"
 
 

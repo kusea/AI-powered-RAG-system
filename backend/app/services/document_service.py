@@ -128,7 +128,7 @@ def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tas
     with open(file_path, "wb") as buffer: #Save file into storage
         copyfileobj(file.file, buffer)
 
-    document = db.query(Document).filter(Document.title == file.filename).first()
+    document = db.query(Document).filter(Document.title == file.filename and Document.user_id == user_id).first()
     if document:
         raise HTTPException(status_code=400, detail="Document with the same name already exists.")
     

@@ -15,7 +15,7 @@ router = APIRouter()
 def search_vector(request: ChatQueryRequest, db: Session = Depends(get_db)): 
     return rag_service.search_similar_embeddings(db, request.query, request.limit)
 
-@router.post("query")
+@router.post("/query")
 async def query(request: ChatQueryStream, db: Session = Depends(get_db)):
     return StreamingResponse(
         rag_service.generate_chat_stream(db, request.query, request.document_ids),

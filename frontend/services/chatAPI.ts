@@ -6,7 +6,7 @@ export interface ChatStreamPayload {
 }
 
 export async function fetchChatStreamAPI(payload: ChatStreamPayload){
-    const res = await fetch(`${API_URL}\chat\query`, {
+    const res = await fetch(`${API_URL}/chat/query`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"

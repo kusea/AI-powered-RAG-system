@@ -61,6 +61,7 @@ export default function LoginPage() {
       router.push("/dashboard");
     } catch (err: unknown) {
       setError("Google authentication failed on server.");
+      console.error("Error logging in with Google:", err);
     } finally {
       setLoading(false);
     }

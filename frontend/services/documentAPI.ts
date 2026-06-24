@@ -1,11 +1,5 @@
 import axios from "axios";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-const api = axios.create({
-    baseURL: API_URL, 
-    headers: {"Content-Type": "application/json"}
-});
+import api from "./APIclient";
 
 export const fetchDocumentAPI = async () => {
     let token = localStorage.getItem("token"); // get token from local storage after user login
