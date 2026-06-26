@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback} from "react";
 import { GoogleOAuthProvider, GoogleLogin, CredentialResponse } from "@react-oauth/google";
 import { authApi} from "@/services/authAPI";
 import { useRouter } from "next/router";
@@ -8,7 +8,7 @@ import { LayoutDashboard, Lock, Mail, Loader2, Eye, EyeOff} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import axios from "axios";
-
+ // Not reset on re-render, to check if Google has been initialized yet
 export default function LoginPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -44,7 +44,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse: CredentialResponse): Promise<void> => {
+  const handleGoogleSuccess = useCallback(async (credentialResponse: CredentialResponse): Promise<void> => {
     if (!credentialResponse.credential) {
       setError("Google authentication failed. No token provided.");
       return;
@@ -65,7 +65,9 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router, queryClient]);
+
+  
 
   return (
     <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
@@ -144,6 +146,7 @@ export default function LoginPage() {
               onError={() => setError("Google login failed")}
               theme="outline"
               width="400"
+              use_fedcm_for_prompt = {true}
             />
           </div>
 

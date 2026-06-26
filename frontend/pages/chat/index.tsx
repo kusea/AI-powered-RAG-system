@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchChatStreamAPI } from "@/services/chatAPI";
-import { FileText, Loader2, Send, User, Bot, Link, ArrowLeft} from "lucide-react";
+import { FileText, Loader2, Send, User, Bot, Plus, ArrowLeft, MessageSquare} from "lucide-react";
 import { useRouter } from "next/router";
+import api from "@/services/APIclient";
 
 interface SourceDocs {
     id: string;
@@ -17,6 +18,11 @@ interface Message {
     sources: SourceDocs[];
 }
 
+interface SessionItem {
+    id: number;
+    title: string;
+}
+
 export default function ChatAssistant(){
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
@@ -26,6 +32,22 @@ export default function ChatAssistant(){
     const router = useRouter();
     const { document_id, title } = router.query;
 
+    const [sessions, setSessions] = useState<SessionItem[]>([]);
+    const [currentSessionId, setCurrentSessionId] = useState<number| null> (null);
+
+    // Get all sessions from API during the loading time
+    useEffect(() => {
+        api.get(`/chat/sessions/{session_id}/messages`).then((response) => {
+            setSessions(response.data);
+            if (response.data.length > 0) setCurrentSessionId(response.data[0].id);
+        })
+    }, [])
+
+    // Get message history of the current session
+    useEffect(() => {
+        if (currentSessionId) api.get(`/chat/sessions/${currentSessionId}/messages`).then(response => setMessages(response.data))
+    }, [currentSessionId])
+
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
@@ -34,6 +56,16 @@ export default function ChatAssistant(){
         () => scrollToBottom(),
         [messages]
     );
+
+    // Make a new session
+    const handleCreateSession = async () => {
+        const title = prompt("Enter a title for the new session:");
+        await api.post("/chat/sessions", {title}).then(response => {
+            setCurrentSessionId(response.data.id);
+            setSessions([response.data, ...sessions]);
+            setMessages([]);
+        })
+    }
 
     const handleSendMessage: React.ComponentProps<"form">["onSubmit"] = async (e) => {
         e.preventDefault();
@@ -139,13 +171,34 @@ export default function ChatAssistant(){
                         }
                     </p>
                 </div>
-
-                <Link href="/dashboard">
-                    <Button variant="ghost" size="sm" className="gap-1 text-xs">
-                        <ArrowLeft className="h-4 w-4" /> Back
-                    </Button>
-                </Link>
+                <Button variant="ghost" size="sm" className="gap-1 text-xs"
+                        onClick={() => router.push("/dashboard")}>
+                    <ArrowLeft className="h-4 w-4" /> Back
+                </Button>
             </header>
+            {/* Sidebar to manage chat sessions*/}
+            <div className="flex h-[calc(100vh-4rem)] ">
+                <div className="w-64 border-r bg-card p-4 flex flex-col justify-between">
+                    <div className="space-y-4">
+                        <Button onClick={handleCreateSession} className="w-full gap-2 flex items-center justify-center">
+                            <Plus className="h-4 w-4" /> New chat session
+                        </Button>
+                        <div className="space-y-1 max-h-[70vh] overflow-y-auto">
+                            {sessions.map((s) => (
+                                <Button
+                                    key={s.id}
+                                    variant={currentSessionId === s.id ? "secondary" : "ghost"}
+                                    className="w-full justify-start gap-2 text-left truncate flex"
+                                    onClick={() => setCurrentSessionId(s.id)}
+                                >
+                                    <MessageSquare className="h-4 w-4 shrink-0" />
+                                    <span className="truncate">{s.title}</span>
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <div className="flex-1 overflow-y-auto space-y-4 pr-2">
                 {messages.length === 0 ? (

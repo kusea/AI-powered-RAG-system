@@ -178,3 +178,12 @@ def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in 
 
 def get_user_document(db: Session, user_id: int) -> list[Document]:
     return db.query(Document).filter(Document.user_id == user_id).all()
+
+def delete_document(db: Session, document_id: int, user_id: int):
+    document = db.query(Document).filter(Document.id == document_id and Document.user_id == user_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found in your account's storage.")
+    
+    db.delete(document)
+    db.commit()
+    return {"message": "Delete document successfully!!!"}

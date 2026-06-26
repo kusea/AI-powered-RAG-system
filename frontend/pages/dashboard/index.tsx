@@ -5,6 +5,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Link} from "lucide-react";
 import { uploadDocumentAPI, fetchDocumentAPI } from "@/services/documentAPI";
 import { getAuthToken } from "@/services/authAPI";
+import { useRouter } from "next/router";
 import axios from "axios";
 
 interface DocumentItem {
@@ -17,7 +18,7 @@ interface DocumentItem {
 
 export default function Dashboard(){
     const queryClient = useQueryClient();
-
+    const router = useRouter();
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [uploadStatus, setUploadStatus] = useState<{ "type": "success" | "error" | "warning", "message": string } | null>(null);
 
@@ -193,10 +194,10 @@ export default function Dashboard(){
                         {documents.map((doc) => (
                             <div
                                 key = {doc.id}
-                                className = "flex item-center justify-between border b-4 round-xl hover:bg-muted/50 transition-colors"
+                                className = "flex item-center justify-between border p-4 pl-6 rounded-xl hover:bg-muted/50 transition-colors"
                             >
                                 <div className = "flex items-center space-x-4 min-w-0">
-                                    <div className = "b-2.5 bg-primary/10 rounded-lg">
+                                    <div className = "p-2.5 bg-primary/10 rounded-lg">
                                         <FileText className = "h-5 w-5" />
                                     </div>
                                     <div className="min-w-0">
@@ -206,17 +207,24 @@ export default function Dashboard(){
                                         </p>
                                     </div>
                                 </div>
-                                <div className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                    <Link href={`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`}>
+                                <div className="px-2 py-6 whitespace-nowrap text-sm font-medium flex items-center">
+                                    {/* <Link href={`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`}>
                                         <Button size="sm" variant = "outline" className="text-amber-500 hover:text-amber-600 border-amber-500/30 gap-1">
-                                            <MessageSquare className="h-4 w-4" />
-                                            Ask AI
+                                            
                                         </Button>
-                                    </Link>
+                                    </Link> */}
+
+                                    <button onClick = {() => router.push(`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`)}
+                                        className="ml-2 text-primary hover:text-primary/80">
+                                        <MessageSquare className="h-4 w-4" />
+                                        Ask AI
+                                    </button>
                                 </div>
-                                <Button className="self-center-safe md:self-center md:mt-0" variant = "outline" size = "sm">
-                                    Details
-                                </Button>
+                                <Link href={`/document/${doc.id}`}>
+                                    <Button className="self-center md:self-center md:mt-0" variant = "outline" size = "sm">
+                                        Details
+                                    </Button>
+                                </Link>
                             </div>
                         ))}
                     </div>

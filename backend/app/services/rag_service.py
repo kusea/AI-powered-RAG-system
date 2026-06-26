@@ -40,13 +40,13 @@ async def generate_chat_stream(db: Session, query_text: str, document_ids: Optio
 
     seen_title = set()
     for doc in relev_docs:
-        normalized_title = (doc.title or "").strip().lower()
+        normalized_title = doc.title.strip()
         if not normalized_title or normalized_title in seen_title:
             continue
+        source_metadata.append({"id": doc.id, "title": doc.title})
         seen_title.add(normalized_title)
 
     content_text = [(doc.content or "").strip() for doc in relevant_docs]
-    source_metadata = [{"id": doc.id, "title": doc.title} for doc in relev_docs]
     # Send the source list as an event called "sources"
     yield f"event: sources\ndata:{json.dumps(source_metadata)}\n\n"
     await asyncio.sleep(0.01)
