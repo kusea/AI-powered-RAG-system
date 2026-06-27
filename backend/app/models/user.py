@@ -16,3 +16,4 @@ class User(Base):
 
     documents = relationship("Document", back_populates = "user", cascade = "all, delete-orphan")
     accounts = relationship("UserAccount", back_populates = "user", cascade = "all, delete-orphan")
+    chat_sessions = relationship("ChatSession", back_populates = "user", cascade = "all, delete-orphan")

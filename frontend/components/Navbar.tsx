@@ -81,7 +81,7 @@ export default function NavBar() {
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)}></div>
                                     <div className="absolute right-0 mt-2 w-56 bg-popover rounded-xl border shadow-lg py-1.5 z-20 text-sm">
-                                    <button onClick={() => setIsDropdownOpen(false)} className="w-full px-3 py-2 text-black hover:bg-muted text-left flex items-center gap-2">
+                                    <button onClick={() => router.push("/profile")} className="w-full px-3 py-2 text-black hover:bg-muted text-left flex items-center gap-2">
                                         <Settings className="h-4 w-4" /> User Profile
                                     </button>
 

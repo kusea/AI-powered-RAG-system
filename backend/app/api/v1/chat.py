@@ -6,7 +6,8 @@ from app.core.database import get_db
 from app.schemas.chat import ChatQueryRequest, ChatQueryStream
 from app.services import rag_service
 from app.schemas.document import ChunkEmbeddingResponse
-from app.models import ChatSession, ChatMessage
+from app.models import ChatSession, ChatMessage, User
+from app.core.security import get_current_user
 
 router = APIRouter()
 
@@ -23,8 +24,8 @@ async def query(request: ChatQueryStream, db: Session = Depends(get_db)):
 )
 
 @router.get("/sessions")
-def get_chat_session(db: Session = Depends(get_db)):
-    return db.query(ChatSession).order_by(ChatSession.created_at.desc()).all()
+def get_chat_session(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return db.query(ChatSession).filter(ChatSession.user_id == user.id).order_by(ChatSession.created_at.desc()).all()
 
 @router.post("/sessions")
 def create_chat_session(title: str, user_id: int, db: Session = Depends(get_db)):

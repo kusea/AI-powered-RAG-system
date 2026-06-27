@@ -2,11 +2,12 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Link} from "lucide-react";
+import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Link, Trash2, Bot} from "lucide-react";
 import { uploadDocumentAPI, fetchDocumentAPI } from "@/services/documentAPI";
 import { getAuthToken } from "@/services/authAPI";
 import { useRouter } from "next/router";
 import axios from "axios";
+import api from "@/services/APIclient";
 
 interface DocumentItem {
     id: number;
@@ -21,6 +22,11 @@ export default function Dashboard(){
     const router = useRouter();
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [uploadStatus, setUploadStatus] = useState<{ "type": "success" | "error" | "warning", "message": string } | null>(null);
+
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const handleToggleSelect = ((id: number) => {
+        setSelectedIds(prevIds => (prevIds.includes(id) ? prevIds.filter(prevId => prevId !== id): ([...prevIds, id])));
+    })
 
     const {data: token} = useQuery({
         queryKey: ["authToken"], 
@@ -103,6 +109,22 @@ export default function Dashboard(){
         },
         multiple: true
     });
+
+    const handleBulkDelete = async () => {
+        const confirmDelete = confirm("Are you sure you want to delete these documents?");
+        if (!confirmDelete) return;
+
+        await api.delete(`/documents/delete-documents`, {data: {document_ids: selectedIds}}).then(() => {
+            queryClient.invalidateQueries({queryKey: ["documents"]});
+            setSelectedIds([]);
+        }).catch(err => alert(`Failed to delete documents: ${err.message}`));
+    };
+
+    const handleBulkAskAI = async () => {
+        if (selectedIds.length === 0) return; 
+        const idsQuery = selectedIds.join(",");
+        router.push(`/chat/document_ids=${idsQuery}&mode=multi`);
+    }
 
     return (
         <div className = "min-h-screen bg-background text-foreground p-8 max-w-5xl mx-auto">
@@ -191,11 +213,41 @@ export default function Dashboard(){
                     <p className = "text-center py-12 border round-xl bg-muted/10 text-muted-foreground">No documents uploaded yet.</p>
                 ) : (
                     <div className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {documents.map((doc) => (
+                        {documents.map((doc) => {
+                            const isChecked = selectedIds.includes(doc.id);
+                            return (
                             <div
                                 key = {doc.id}
-                                className = "flex item-center justify-between border p-4 pl-6 rounded-xl hover:bg-muted/50 transition-colors"
+                                className = {`flex item-center justify-between border p-4 pl-6 rounded-xl hover:bg-muted/50 transition-colors
+                                            ${isChecked ? "border-primary bg-primary/5 shadow-sm" : "hover:bg-muted/50"}`}
                             >
+                                <div className="absolute top-4 right-4 z-10">
+                                    <input
+                                        title="Select document"
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleSelect(doc.id)}
+                                        className="h-4 w-4 rounded border-gray-300 text-primary cursor-pointer accent-primary"
+                                    />
+                                </div>
+
+                                {selectedIds.length > 0 && (
+                                    <div className="mt-6 flex items-center justify-between p-4 bg-primary/10 border border-primary/20 rounded-xl">
+                                        <div className="flex items-center gap-2 text-sm font-medium">
+                                            <CheckCircle className="h-5 w-5 text-primary" />
+                                            <span>Selected <strong className="text-primary text-base">{selectedIds.length}</strong> documnets</span>
+                                        </div>
+                                        <div className="flex items-center space-x-3">
+                                            <Button onClick={handleBulkAskAI} variant="outline" className="text-amber-500 border-amber-500/30 hover:bg-amber-500/10 gap-2">
+                                                <Bot className="h-4 w-4" /> Ask AI about these documents
+                                            </Button>
+                                            <Button onClick={handleBulkDelete} variant="destructive" className="gap-2">
+                                                <Trash2 className="h-4 w-4" /> Delete selected documents
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className = "flex items-center space-x-4 min-w-0">
                                     <div className = "p-2.5 bg-primary/10 rounded-lg">
                                         <FileText className = "h-5 w-5" />
@@ -226,7 +278,7 @@ export default function Dashboard(){
                                     </Button>
                                 </Link>
                             </div>
-                        ))}
+                        )})}
                     </div>
                 )}
             </div>

@@ -38,8 +38,8 @@ def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(.
     
 @router.get("/", response_model = List[DocumentResponse])
 def list_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return document_service.get_user_document(db, current_user.id)
+    return document_service.get_user_document(db, current_user.id) # Use for deleting multiple documents, if only 1 document, pass 1 value into list
 
-@router.delete("/{document_id}", status_code = status.HTTP_200_OK)
-def delete_document(document_id: int, current_user_id: int, db: Session = Depends(get_db)):
-    return document_service.delete_document(db, document_id, current_user_id)
+@router.delete("/delete-document", status_code = status.HTTP_200_OK)
+def delete_document(document_id: List[int], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return document_service.delete_document(db, document_id, current_user.id)

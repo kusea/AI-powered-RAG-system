@@ -6,7 +6,6 @@ from sentence_transformers import SentenceTransformer
 
 import os 
 import uuid
-import openpyxl
 import pandas as pd
 from shutil import copyfileobj
 from fastapi import UploadFile, HTTPException
@@ -179,11 +178,12 @@ def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in 
 def get_user_document(db: Session, user_id: int) -> list[Document]:
     return db.query(Document).filter(Document.user_id == user_id).all()
 
-def delete_document(db: Session, document_id: int, user_id: int):
-    document = db.query(Document).filter(Document.id == document_id and Document.user_id == user_id).first()
-    if not document:
+def delete_document(db: Session, document_ids: list[int], user_id: int):
+    docs = db.query(Document).filter(Document.id.in_(document_ids) and Document.user_id == user_id).all()
+    if not docs:
         raise HTTPException(status_code=404, detail="Document not found in your account's storage.")
     
-    db.delete(document)
+    for doc in docs:
+        db.delete(doc)
     db.commit()
     return {"message": "Delete document successfully!!!"}

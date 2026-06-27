@@ -30,7 +30,7 @@ export default function ChatAssistant(){
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     const router = useRouter();
-    const { document_id, title } = router.query;
+    const { document_id, title, document_ids} = router.query;
 
     const [sessions, setSessions] = useState<SessionItem[]>([]);
     const [currentSessionId, setCurrentSessionId] = useState<number| null> (null);
@@ -71,7 +71,7 @@ export default function ChatAssistant(){
         e.preventDefault();
         const userQuery = input.trim();
 
-        if (!userQuery || isLoading) return;
+        if (!userQuery || isLoading || !currentSessionId) return;
         setInput("");
         setIsLoading(true);
 
@@ -95,10 +95,10 @@ export default function ChatAssistant(){
         ]);
 
         try {
-            const docIdNum = document_id ? Number(document_id) : undefined;
+            const parseDocIds = document_ids ? (document_ids as string).split(",").map((id) => Number(id)) : [Number(document_id)];
             const stream = await fetchChatStreamAPI({
                 query: userQuery, 
-                document_ids: docIdNum ? [docIdNum] : []
+                document_ids: parseDocIds
             });
             if (!stream) return;
 
@@ -161,7 +161,12 @@ export default function ChatAssistant(){
                     <h1 className="text-xl font-bold tracking-tight">AI Assistant (RAG)</h1>
                     <p className="text-xs text-muted-foreground">
                         {
-                            document_id ? (
+                            document_ids ? (
+                                <span className="text-primary font-medium">
+                                    <FileText className="h-3 w-3" />
+                                    Question and answer based on these documents: {`ID ${document_ids}`}
+                                </span>
+                            ): document_id ? (
                                 <span className="text-amber-500 font-medium flex items-center gap-1 mt-0.5">
                                     <FileText className="h-3 w-3" /> Question and answer based on document: {title || `ID ${document_id}`}
                                 </span>
@@ -176,7 +181,7 @@ export default function ChatAssistant(){
                     <ArrowLeft className="h-4 w-4" /> Back
                 </Button>
             </header>
-            {/* Sidebar to manage chat sessions*/}
+            {/* Sidebar to manage chat sessions */}
             <div className="flex h-[calc(100vh-4rem)] ">
                 <div className="w-64 border-r bg-card p-4 flex flex-col justify-between">
                     <div className="space-y-4">
