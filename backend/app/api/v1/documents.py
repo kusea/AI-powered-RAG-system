@@ -9,7 +9,7 @@ from app.services import document_service;
 from typing import List
 
 from app.core.security import get_current_user
-from app.models import User
+from app.models import User, Document
 
 
 router = APIRouter()
@@ -39,6 +39,10 @@ def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(.
 @router.get("/", response_model = List[DocumentResponse])
 def list_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return document_service.get_user_document(db, current_user.id) # Use for deleting multiple documents, if only 1 document, pass 1 value into list
+
+@router.get("/{document_id}", response_model = DocumentResponse)
+def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):
+    return db.query(Document).filter(Document.id == document_id and Document.user_id == current_user.id).first()
 
 @router.delete("/delete-document", status_code = status.HTTP_200_OK)
 def delete_document(document_id: List[int], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):

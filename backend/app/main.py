@@ -9,7 +9,7 @@ from app.core.database import Base, engine
 
 from app.middlewares.rate_limiter import RateLimitMiddleware
 
-from app.api.v1 import chat, documents, auth
+from app.api.v1 import chat, documents, auth, profile
 
 __all__ = ["app", "Base", "Document", "User", "UserAccount"]
 
@@ -45,6 +45,7 @@ app.add_middleware(
 app.include_router(chat.router, prefix = "/api/v1/chat", tags = ["AI Chat and Vector Search"])
 app.include_router(documents.router, prefix = "/api/v1/documents", tags = ["Documents and Embeddings"])
 app.include_router(auth.router, prefix = "/api/v1/auth", tags = ["Authentication"])
+app.include_router(profile.router, prefix = "/api/v1/profile", tags = ["Profile"])
 
 @app.get("/", tags = ["Health Check"])
 def read_root():

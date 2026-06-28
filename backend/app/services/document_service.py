@@ -13,6 +13,7 @@ from app.core.config import settings
 from pypdf import PdfReader
 from docx import Document as DocxReader 
 from pptx import Presentation
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
 
 # Encode content (or title) text to vector embedding
@@ -58,6 +59,44 @@ def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: 
                     })
 
                     start += (chunk_size - chunk_overlap)
+
+        elif file_extension == "md":
+            with open(filepath, "r", encoding="utf-8") as f:
+                text = f.read()
+
+            headers_to_split = [
+                ('#', 'Header1'),
+                ('##', 'Header2'),
+                ('###', 'Header3'),
+            ]
+
+            # Intialize the splitter with the headers
+            markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split=headers_to_split)
+            md_header_splitter = markdown_splitter.split_text(text)
+
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size = chunk_size,
+                chunk_overlap = chunk_overlap,
+                seperators = ["\n\n", "\n", " ", ""]
+            )
+
+            splits = text_splitter.split_documents(md_header_splitter) # Split the text with headers and content (include page_content and metadata)
+            for idx, split in enumerate(splits, start=1):
+                chunk_text = split.page_content.strip()
+
+                if not chunk_text:
+                    continue
+                
+                # Create header and context from metadata and split to each other by " > "
+                header_content = " > ".join([f"{header}: {content}" for header, content in split.metadata.items()])
+                full_chunk_text = chunk_text
+                if header_content:
+                    full_chunk_text = f"[{header_content}]\n{chunk_text}" #Make content with full context and headers
+
+                chunks.append({
+                    "text": full_chunk_text,
+                    "source_location": f"{filepath}:chunk:{idx}"
+                })
 
         elif file_extension in ["txt", "html"]:
             with open(filepath, "r", encoding="utf-8") as f:
@@ -113,6 +152,44 @@ def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: 
     
     return chunks
 
+
+def extract_full_text(filepath: str):
+    file_extension = filepath.split(".")[-1].lower()
+    full_text = ""
+    try:
+        if file_extension == "pdf": 
+            reader = PdfReader(filepath)
+            text_list = []
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    text_list.append(text)
+            full_text = "\n".join(text_list)
+        elif file_extension ==  "docx":
+            doc = DocxReader(filepath)
+            full_text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+        elif file_extension in ["html", "txt", "md"]:
+            with open(filepath, "r", encoding = "utf-8") as f: 
+                full_text = f.read()
+        elif file_extension == "pptx":
+            prs = Presentation(filepath)
+            for slide in prs.slides:
+                slide_text = []
+                for shape in slide.shapes:
+                    slide_text.append(shape.text) if hasattr(shape, "text") and shape.text.strip() else None
+                full_text += "\n".join(slide_text)
+        elif file_extension in ["csv", "xls", "xlsx"]:
+            df = pd.read_csv(filepath) if file_extension == "csv" else pd.read_excel(filepath)
+            row_list = []
+            for row in df.iterrows():
+                row_text = ", ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
+                row_list.append(row_text) if row_text else None
+            full_text = "\n".join(row_list)
+    except Exception as e:
+        raise HTTPException(status_code = 500, detail = f"Fail to read file: {str(e)}")
+    
+    return full_text.strip()
+
 # Upload file
 UPLOAD_DIR = "storage"
 
@@ -131,9 +208,11 @@ def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tas
     if document:
         raise HTTPException(status_code=400, detail="Document with the same name already exists.")
     
+    file_content = extract_full_text(file_path)
+    
     saved_documents = save_chunks_embeddings(db, ChunkEmbeddingCreate(
         title=file.filename, 
-        content="",
+        content=file_content,
         user_id=user_id, 
         file_path=file_path, 
         file_size=os.path.getsize(file_path)
@@ -153,16 +232,6 @@ def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in 
         for chunk in chunks:
             if not chunk['text'].strip():
                 continue
-            """ 
-            if "page" in chunk: # PDF
-                chunk_title = f"{file.filename} (Page {chunk['page']})"
-            elif "slide" in chunk: # PPTX
-                chunk_title = f"{file.filename} (Slide {chunk['slide']})"
-            elif "row" in chunk: # CSV, XLS, XLSX
-                chunk_title = f"{file.filename} (Row {chunk['row']})"
-            else: # TXT, HTML, DOCX
-                chunk_title = f"{file.filename} ({chunk['source_location']})"
-            print(f"Chunk title: {chunk_title}") """
             chunk_data = ChunkEmbeddingCreate(
                 content=chunk['text'],
                 document_id=document_id

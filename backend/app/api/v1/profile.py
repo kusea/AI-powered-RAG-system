@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models import User
+from app.core.security import get_current_user
 
 class ProfileUpdater(BaseModel):
     email: EmailStr
@@ -10,8 +11,8 @@ class ProfileUpdater(BaseModel):
 
 router = APIRouter()
 @router.get("/me")
-def get_profile(user_id: int,db: Session = Depends(get_db)):
-    return db.query(User).filter(User.id == user_id).first()
+def get_profile(current_user: User = Depends(get_current_user),db: Session = Depends(get_db)):
+    return db.query(User).filter(User.id == current_user.id).first()
 
 @router.put("/me")
 def update_profile(profile: ProfileUpdater, db: Session = Depends(get_db)):
@@ -19,7 +20,6 @@ def update_profile(profile: ProfileUpdater, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     for us in user:
-        us.email = profile.email
         us.username = profile.username
 
     db.commit()

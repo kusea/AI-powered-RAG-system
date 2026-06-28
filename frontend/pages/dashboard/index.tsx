@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Link, Trash2, Bot} from "lucide-react";
+import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Trash2, Bot} from "lucide-react";
 import { uploadDocumentAPI, fetchDocumentAPI } from "@/services/documentAPI";
 import { getAuthToken } from "@/services/authAPI";
 import { useRouter } from "next/router";
@@ -192,10 +192,39 @@ export default function Dashboard(){
                 </div>
             )}
 
+            {selectedIds.length > 0 && (
+                <div className="mt-6 flex items-center justify-between p-4 bg-primary/10 border border-primary/20 rounded-xl">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                        <CheckCircle className="h-5 w-5 text-primary" />
+                        <span>Selected <strong className="text-primary text-base">{selectedIds.length}</strong> documnets</span>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                        <Button onClick={handleBulkAskAI} variant="outline" className="text-amber-500 border-amber-500/30 hover:bg-amber-500/10 gap-2">
+                            <Bot className="h-4 w-4" /> Ask AI about {(selectedIds.length == 1) ? "this document" : `these ${selectedIds.length} selected documents`}
+                        </Button>
+                        <Button onClick={handleBulkDelete} variant="destructive" className="gap-2">
+                            <Trash2 className="h-4 w-4" /> Delete selected documents
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             {/* Document List */}
             <div className = "mt-10">
-                <h2 className = "text-xl font-semibold mb-4 flex items-center gap-2">Your Documents</h2>
+                <div className="flex items-center justify-between border-b mb-4">
+                    <h2 className = "text-xl font-semibold mb-4 flex items-center gap-2 pb-2">Your Documents</h2>
+                    { isHasToken && documents.length > 0 && (
+                        <Button variant="ghost" size="sm"
+                                className = {`text-sm font-medium text-primary hover:bg-primary/10 transition-colors underline 
+                                            ${selectedIds.length === documents.length ? "text-destructive" : "" }`}
+                                onClick = {() => setSelectedIds((selectedIds.length === documents.length) ? [] : documents.map(doc => doc.id))}
+                                // If all documents are selected, unselect all. Otherwise, select all
+                        >
+                            {selectedIds.length === documents.length ? "Deselect All" : "Select All"} 
+                        </Button>
+                    )
+                    }
+                </div>
                 { !isHasToken ? (
                     <div className="text-center py-12 border rounded-xl bg-destructive/5 border-destructive/20 text-destructive">
                         You must login to view your documents.
@@ -212,13 +241,13 @@ export default function Dashboard(){
                 ) : documents.length === 0 ? (
                     <p className = "text-center py-12 border round-xl bg-muted/10 text-muted-foreground">No documents uploaded yet.</p>
                 ) : (
-                    <div className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className = "grid grid-cols-1 md:grid-cols-2 gap-4">
                         {documents.map((doc) => {
                             const isChecked = selectedIds.includes(doc.id);
                             return (
                             <div
                                 key = {doc.id}
-                                className = {`flex item-center justify-between border p-4 pl-6 rounded-xl hover:bg-muted/50 transition-colors
+                                className = {`flex relative items-center justify-between border p-4 pl-6 rounded-xl hover:bg-muted/50 transition-colors
                                             ${isChecked ? "border-primary bg-primary/5 shadow-sm" : "hover:bg-muted/50"}`}
                             >
                                 <div className="absolute top-4 right-4 z-10">
@@ -231,22 +260,7 @@ export default function Dashboard(){
                                     />
                                 </div>
 
-                                {selectedIds.length > 0 && (
-                                    <div className="mt-6 flex items-center justify-between p-4 bg-primary/10 border border-primary/20 rounded-xl">
-                                        <div className="flex items-center gap-2 text-sm font-medium">
-                                            <CheckCircle className="h-5 w-5 text-primary" />
-                                            <span>Selected <strong className="text-primary text-base">{selectedIds.length}</strong> documnets</span>
-                                        </div>
-                                        <div className="flex items-center space-x-3">
-                                            <Button onClick={handleBulkAskAI} variant="outline" className="text-amber-500 border-amber-500/30 hover:bg-amber-500/10 gap-2">
-                                                <Bot className="h-4 w-4" /> Ask AI about these documents
-                                            </Button>
-                                            <Button onClick={handleBulkDelete} variant="destructive" className="gap-2">
-                                                <Trash2 className="h-4 w-4" /> Delete selected documents
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
+                                
 
                                 <div className = "flex items-center space-x-4 min-w-0">
                                     <div className = "p-2.5 bg-primary/10 rounded-lg">
@@ -259,24 +273,27 @@ export default function Dashboard(){
                                         </p>
                                     </div>
                                 </div>
-                                <div className="px-2 py-6 whitespace-nowrap text-sm font-medium flex items-center">
+                                <div className="px-6 py-6 whitespace-nowrap flex items-center pt-3 mt-4 gap-2">
                                     {/* <Link href={`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`}>
                                         <Button size="sm" variant = "outline" className="text-amber-500 hover:text-amber-600 border-amber-500/30 gap-1">
                                             
                                         </Button>
                                     </Link> */}
 
-                                    <button onClick = {() => router.push(`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`)}
-                                        className="ml-2 text-primary hover:text-primary/80">
-                                        <MessageSquare className="h-4 w-4" />
-                                        Ask AI
+                                    <button
+                                        title = "Ask AI" 
+                                        onClick = {() => router.push(`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`)}
+                                        className="text-primary hover:text-primary/80">
+                                        <MessageSquare className="h-4 w-4 cursor-pointer" />
                                     </button>
-                                </div>
-                                <Link href={`/document/${doc.id}`}>
-                                    <Button className="self-center md:self-center md:mt-0" variant = "outline" size = "sm">
+
+                                    <div className="spacex-x-4 bg-muted" />
+
+                                    <Button className="self-center md:self-center md:mt-0" variant = "outline" size = "sm"
+                                            onClick = {() => router.push(`/documents/${doc.id}`)}>
                                         Details
                                     </Button>
-                                </Link>
+                                </div>
                             </div>
                         )})}
                     </div>

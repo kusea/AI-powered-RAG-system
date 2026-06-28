@@ -127,3 +127,13 @@
     @apply font-sans;
     }
 }
+
+html,
+body,
+#__next {
+  height: 100vh !important;
+  width: 100vw !important;
+  overflow: hidden !important; /* Khóa cứng không cho phép thẻ __next sinh thanh cuộn */
+  margin: 0;
+  padding: 0;
+}
