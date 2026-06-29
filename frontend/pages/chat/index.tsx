@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchChatStreamAPI } from "@/services/chatAPI";
@@ -13,7 +13,7 @@ interface SourceDocs {
 
 interface Message {
     id: string;
-    text: string;
+    content: string;
     role: "user" | "assistant";
     sources: SourceDocs[];
 }
@@ -28,9 +28,10 @@ export default function ChatAssistant(){
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
+    const isAutoSessionRef = useRef(false); // flag to determine whether to create a new session
 
     const router = useRouter();
-    const { document_id, title, document_ids} = router.query;
+    const {document_id, title, document_ids} = router.query;
 
     const [sessions, setSessions] = useState<SessionItem[]>([]);
     const [currentSessionId, setCurrentSessionId] = useState<number| null> (null);
@@ -39,14 +40,29 @@ export default function ChatAssistant(){
     useEffect(() => {
         api.get(`/chat/sessions`).then((response) => {
             setSessions(response.data);
-            if (response.data.length > 0) setCurrentSessionId(response.data[0].id);
+            // if (response.data.length > 0) setCurrentSessionId(response.data[0].id);
+            // allow current_session_id = null to make the empty UI initially
         })
     }, [])
 
+    const loadMessageHistory = useCallback((sessionId: number) => {
+        api.get(`/chat/sessions/${sessionId}/messages`)
+            .then((response) => {
+                setMessages(response.data);
+            })
+            .catch((err) => console.error("Error loading message history", err));
+    }, []);
+
     // Get message history of the current session
     useEffect(() => {
-        if (currentSessionId) api.get(`/chat/sessions/${currentSessionId}/messages`).then(response => setMessages(response.data))
-    }, [currentSessionId])
+        if (currentSessionId) {
+            if (isAutoSessionRef.current){
+                isAutoSessionRef.current = false;
+                return;
+            }
+            loadMessageHistory(currentSessionId);
+        }
+    }, [currentSessionId, loadMessageHistory]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,19 +75,18 @@ export default function ChatAssistant(){
 
     // Make a new session
     const handleCreateSession = async () => {
-        const title = prompt("Enter a title for the new session:");
-        await api.post("/chat/sessions", {title}).then(response => {
-            setCurrentSessionId(response.data.id);
-            setSessions([response.data, ...sessions]);
-            setMessages([]);
-        })
+        isAutoSessionRef.current = false;
+        setCurrentSessionId(null);
+        setMessages([]);
+        setInput("");
     }
 
+    
     const handleSendMessage: React.ComponentProps<"form">["onSubmit"] = async (e) => {
         e.preventDefault();
         const userQuery = input.trim();
 
-        if (!userQuery || isLoading || !currentSessionId) return;
+        if (!userQuery || isLoading) return;
         setInput("");
         setIsLoading(true);
 
@@ -82,23 +97,25 @@ export default function ChatAssistant(){
             ...prevMessage,
             {
                 id: userMessageId,
-                text: userQuery,
+                content: userQuery,
                 role: "user",
                 sources: [],
             },
             {
                 id: assistantMessageId,
-                text: "",
+                content: "",
                 role: "assistant",
                 sources: []
             }
         ]);
 
         try {
-            const parseDocIds = document_ids ? (document_ids as string).split(",").map((id) => Number(id)) : [Number(document_id)];
+            const parseDocIds = document_ids ? (document_ids as string).split(",").map((id) => Number(id)) : 
+                                document_id ? [Number(document_id)]: [];
             const stream = await fetchChatStreamAPI({
                 query: userQuery, 
-                document_ids: parseDocIds
+                document_ids: parseDocIds,
+                session_id: currentSessionId
             });
             if (!stream) return;
 
@@ -128,6 +145,13 @@ export default function ChatAssistant(){
 
                         try{
                             const parsedData = JSON.parse(dataStr);
+                            if (parsedData.session_info) {
+                                const sessionInfo = parsedData.session_info;
+                                isAutoSessionRef.current = true; // Turn on the flag to not load message history
+                                setCurrentSessionId(sessionInfo.id);
+                                setSessions(prev => [sessionInfo, ...prev])
+                            }
+
                             if (Array.isArray(parsedData)){
                                 currentSources = parsedData;
                                 setMessages((prevMessage) => prevMessage.map((message) => 
@@ -135,7 +159,7 @@ export default function ChatAssistant(){
                                 ));
                             } else if (parsedData.text) {// Check if text is from LLM
                                 setMessages((prevMessage) => prevMessage.map((message) => 
-                                    message.id === assistantMessageId ? {...message, text: message.text + parsedData.text} : message
+                                    message.id === assistantMessageId ? {...message, content: message.content + parsedData.content} : message
                                 ));
                             }
                         } catch (err) {
@@ -181,7 +205,7 @@ export default function ChatAssistant(){
                 </div>
                 
             </aside>
-            <main className="flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden h-[calc(100vh-4rem)] relative bg-slate-50/50 dark:bg-zinc-900/20">
+            <main className="flex flex-1 min-w-0 min-h-0 flex-col overflow-auto h-[calc(100vh-4rem)] relative bg-slate-50/50 dark:bg-zinc-900/20">
                 <header className="border-b bg-background/95 backdrop-blur px-6 py-3 flex items-center gap-3 pt-1 shrink-0 h-16">
                     <Button variant="ghost" size="sm" className="gap-1 text-xs"
                             onClick={() => router.push("/dashboard")}>
@@ -210,63 +234,68 @@ export default function ChatAssistant(){
                 </header>
                 
                 {/* Chat messages */}
-                <div className="flex-1 min-h-0 overflow-y-clip px-4 py-6 md:px-8 space-y-6 custom-scrollbar pb-32">
-                    {messages.length === 0 ? (
+                <div className="flex-1 min-h-0 overflow-y-auto px-4 py-6 md:px-8 space-y-6 custom-scrollbar pb-36">
+                    {(!currentSessionId || messages.length === 0) ? (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         <Bot className="h-12 w-12 text-muted-foreground/40" />
-                        <p className="text-sm">
-                            Send questions to ask AI Assistant {document_id ? "about this document...": "about all of your documents..."}(RAG)
-                        </p>
+                        <div>
+                            <h2 className="text-xl font-bold text-foreground tracking-tight">Tôi có thể giúp gì cho bạn hôm nay?</h2>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                Send questions to ask AI Assistant {document_id ? "about this document...": "about all of your documents..."}(RAG)
+                            </p>
+                        </div>
                     </div>
                     ) : (
-                    messages.map((msg) => (
-                        <div
-                        key={msg.id}
-                        className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                        >
-                            {msg.role === "assistant" && (
-                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                                <Bot className="h-4 w-4 text-primary" />
-                                </div>
-                            )}
-                            
-                            <div className="flex flex-col max-w-[80%] gap-1">
-                                <div
-                                className={`rounded-2xl p-4 text-sm ${
-                                    msg.role === "user"
-                                    ? "bg-primary text-primary-foreground rounded-tr-none"
-                                    : "bg-muted text-foreground rounded-tl-none border"
-                                }`}
-                                >
-                                {msg.text || (isLoading && msg.role === "assistant" && msg.text === "" ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                ) : msg.text)}
+                    <div className="max-w-3xl mx-auto space-y-6">
+                        {messages.map((msg) => (
+                            <div
+                            key={msg.id}
+                            className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                            >
+                                {msg.role === "assistant" && (
+                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                    <Bot className="h-4 w-4 text-primary" />
+                                    </div>
+                                )}
+                                
+                                <div className="flex flex-col max-w-[85%] md:max-w-[75%] gap-2">
+                                    <div
+                                    className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                                        msg.role === "user"
+                                        ? "bg-primary text-primary-foreground rounded-tr-none"
+                                        : "bg-muted text-foreground rounded-tl-none border"
+                                    }`}>
+                                    {msg.content || (isLoading && msg.role === "assistant" && msg.content === "" ? (
+                                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                    ) : msg.content)}
+                                    </div>
+
+                                    {/* Show the sources if it is available */}
+                                    {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-1.5">
+                                        {msg.sources.map((source) => (
+                                        <div
+                                            key={source.id}
+                                            className="flex items-center gap-1 text-[11px] bg-background border text-muted-foreground px-2 py-0.5 rounded-md shadow-sm"
+                                        >
+                                            <FileText className="h-3 w-3 text-primary" />
+                                            <span className="truncate max-w-37.5 font-medium">Context: {source.title}</span>
+                                        </div>
+                                        ))}
+                                    </div>
+                                    )}
                                 </div>
 
-                                {/* Show the sources if it is available */}
-                                {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-1.5">
-                                    {msg.sources.map((source) => (
-                                    <div
-                                        key={source.id}
-                                        className="flex items-center gap-1 text-[11px] bg-background border text-muted-foreground px-2 py-0.5 rounded-md shadow-sm"
-                                    >
-                                        <FileText className="h-3 w-3 text-primary" />
-                                        <span className="truncate max-w-37.5 font-medium">Context: {source.title}</span>
+                                {msg.role === "user" && (
+                                    <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+                                        <User className="h-4 w-4 text-primary-foreground" />
                                     </div>
-                                    ))}
-                                </div>
                                 )}
                             </div>
-
-                            {msg.role === "user" && (
-                                <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-                                    <User className="h-4 w-4 text-primary-foreground" />
-                                </div>
-                            )}
-                        </div>
-                    )))}
-                    <div ref={messagesEndRef} />
+                        ))}
+                        <div ref={messagesEndRef} />
+                    </div>
+                    )}
                 </div>
                         {/* Place for inputing message */}
                 <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-background 

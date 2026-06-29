@@ -17,19 +17,49 @@ def search_vector(request: ChatQueryRequest, db: Session = Depends(get_db)):
     return rag_service.search_similar_embeddings(db, request.query, request.limit)
 
 @router.post("/query")
-async def query(request: ChatQueryStream, db: Session = Depends(get_db)):
+async def query(request: ChatQueryStream, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    print(f"REQUEST_QUERTY: {request.query}")
+    session_title = ""
+    session_id = request.session_id
+    is_new_session = False
+    print(f"Current user id: {current_user.id}")
+    if not session_id:
+        is_new_session = True
+        limit_title_length = 30
+        session_title = request.query[:limit_title_length] + "..." if len(request.query) > limit_title_length else request.query
+        
+        print(f"Session title: {session_title}")
+        
+        new_session= ChatSession(user_id = current_user.id, title = session_title)
+        current_user.chat_sessions.append(new_session)
+        db.add(new_session)
+        db.commit()
+        db.refresh(new_session)
+        session_id = new_session.id
+
+    user_message = ChatMessage(
+        session_id = session_id,
+        role = "user",
+        content = request.query
+    )
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    session.messages.append(user_message)
+    db.add(user_message)
+    db.commit()
+
     return StreamingResponse(
-        rag_service.generate_chat_stream(db, request.query, request.document_ids),
+        rag_service.generate_chat_stream(db, request.query, request.document_ids, is_new_session, session_id, session_title),
         media_type = "text/event-stream"
-)
+    )
 
 @router.get("/sessions")
 def get_chat_session(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return db.query(ChatSession).filter(ChatSession.user_id == user.id).order_by(ChatSession.created_at.desc()).all()
 
 @router.post("/sessions")
-def create_chat_session(title: str, user_id: int, db: Session = Depends(get_db)):
-    new_session= ChatSession(user_id = user_id, title = title)
+def create_chat_session(title: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    print(f"Current user id: {current_user.id}")
+    new_session= ChatSession(user_id = current_user.id, title = title)
     db.add(new_session)
     db.commit()
     db.refresh(new_session)

@@ -8,3 +8,4 @@ class ChatQueryRequest(BaseModel):
 class ChatQueryStream(BaseModel):
     query: str
     document_ids: Optional[list[int]] = None
+    session_id: Optional[int] = None

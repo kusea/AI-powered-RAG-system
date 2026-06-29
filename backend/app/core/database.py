@@ -7,7 +7,7 @@ from app.core.config import settings
 engine = create_engine(settings.DATABASE_URL, echo=True)
 
 # Make session class to exchange when call API
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine,expire_on_commit=False)
 
 # Base class of ORM Models
 Base = declarative_base()

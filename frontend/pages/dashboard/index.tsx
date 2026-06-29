@@ -111,7 +111,7 @@ export default function Dashboard(){
     });
 
     const handleBulkDelete = async () => {
-        const confirmDelete = confirm("Are you sure you want to delete these documents?");
+        const confirmDelete = confirm(`Are you sure you want to delete ${selectedIds.length === 1 ? "this document" : "these documents"}?`);
         if (!confirmDelete) return;
 
         await api.delete(`/documents/delete-documents`, {data: {document_ids: selectedIds}}).then(() => {
@@ -203,7 +203,7 @@ export default function Dashboard(){
                             <Bot className="h-4 w-4" /> Ask AI about {(selectedIds.length == 1) ? "this document" : `these ${selectedIds.length} selected documents`}
                         </Button>
                         <Button onClick={handleBulkDelete} variant="destructive" className="gap-2">
-                            <Trash2 className="h-4 w-4" /> Delete selected documents
+                            <Trash2 className="h-4 w-4" /> Delete selected {selectedIds.length === 1 ? "document" : "documents"}
                         </Button>
                     </div>
                 </div>

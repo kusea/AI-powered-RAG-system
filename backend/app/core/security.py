@@ -40,6 +40,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     try:
         jwt_decode = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = jwt_decode.get("sub")
+        print(f"----------------user_id: {user_id}----------------------")
         if not user_id: 
             print ("Username not found in token")
             raise credentials_exception

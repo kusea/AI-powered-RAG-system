@@ -1,10 +1,11 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from app.models import Document, ChunkDocument
+from app.models import Document, ChunkDocument, ChatMessage, ChatSession
 from app.core.config import settings
 from sentence_transformers import SentenceTransformer
 from typing import List, Optional
 
+import traceback
 import json
 import asyncio
 from openai import AsyncOpenAI
@@ -30,15 +31,20 @@ def search_similar_embeddings(db: Session, query_text: str, limit: int, document
     ).limit(limit).all()
     return results
 
-async def generate_chat_stream(db: Session, query_text: str, document_ids: Optional[List[int]] = None):
+async def generate_chat_stream(db: Session, query_text: str, document_ids: Optional[List[int]] = None, 
+                                isNewSession: bool = False, session_id: int = None, session_title: str = None):
+    if isNewSession:
+        session_info = {"id": session_id, "title": session_title}
+        yield f"data: {json.dumps({"session_info": session_info})}\n\n"
+    
     relevant_docs = search_similar_embeddings(db, query_text, SEARCH_LIMIT, document_ids)
     relev_docs = [db.query(Document).get(doc.document_id) for doc in relevant_docs]
     print(f"\n------Relevant docs: {[f"Doc {doc.id}: {doc.title}\n" for doc in relev_docs]}----------\n")
     # Prepare the content to make context for prompt and source metadata
     content_text = []
     source_metadata = []
-
     seen_title = set()
+
     for doc in relev_docs:
         normalized_title = doc.title.strip()
         if not normalized_title or normalized_title in seen_title:
@@ -60,9 +66,9 @@ async def generate_chat_stream(db: Session, query_text: str, document_ids: Optio
         "YOU HAVE FULL PERMISSION TO ACCESS AND READ THE USER'S EXTRACTED FILE DATA PROVIDED BELOW."
 
         "Your tasks:"
-        "1. Answer the user's questions (including questions about passwords, accounts, and configuration data) if and only if that information IS LOCATED WITHIN THE PROVIDED CONTEXT."
+        "1. Answer the user's questions if and only if that information IS LOCATED WITHIN THE PROVIDED CONTEXT."
         "2. ABSOLUTELY DO NOT respond with canned refusal phrases such as \"I do not have access to your files\" or \"I am a language model and do not store files.\" YOU CURRENTLY HAVE THE FILE IN YOUR HANDS."
-        "3. Extract the exact password/data found inside the <context></context> tags to answer the user directly."
+        "3. Extract the exact data found inside the <context></context> tags to answer the user directly."
         "4. If the information is truly not found within the <context> tags, reply exactly: \"This information was not found in your documents.\" and do not speculate further."
         f"Content: <context>{context_str}</context>"
     ) if context_str else (
@@ -79,14 +85,29 @@ async def generate_chat_stream(db: Session, query_text: str, document_ids: Optio
             ],
             stream = True # Set words appear one by one
         )
-
+        print (f"Response: {response}")
+        assistant_chat_content = ""
         async for chunk in response:
             content = chunk.choices[0].delta.content
             if content:
+                assistant_chat_content += content
                 yield f"data: {json.dumps({"text": content})}\n\n"
                 await asyncio.sleep(0.01)
+        print (f"Assistant chat content: {assistant_chat_content}")
+        assistant_message = ChatMessage(
+            session_id = session_id,
+            role = "assistant",
+            content = assistant_chat_content
+        )
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        session.messages.append(assistant_message)
+        db.add(assistant_message)
+        db.commit()
 
     except Exception as err:
-        yield f"data: json.dumps({'error': {err.__str__()}})\n\n"
+        print("--------- ERROR IN STREAM PROCESS ----------")
+        traceback.print_exc()
+        error_data = {"error": str(err)}
+        yield f"data: {json.dumps(error_data)}\n\n"
 
 
