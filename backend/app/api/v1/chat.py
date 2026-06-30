@@ -8,7 +8,8 @@ from app.services import rag_service
 from app.schemas.document import ChunkEmbeddingResponse
 from app.models import ChatSession, ChatMessage, User
 from app.core.security import get_current_user
-from pydantic import BaseModel
+from pydantic import BaseModel 
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -55,7 +56,10 @@ async def query(request: ChatQueryStream, db: Session = Depends(get_db), current
 
 @router.get("/sessions")
 def get_chat_session(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.query(ChatSession).filter(ChatSession.user_id == user.id).order_by(ChatSession.created_at.desc()).all()
+    return db.query(ChatSession).filter(
+        ChatSession.user_id == user.id, 
+        ChatSession.deleted_at == None
+    ).order_by(ChatSession.created_at.desc()).all()
 
 @router.post("/sessions")
 def create_chat_session(title: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -87,11 +91,15 @@ def rename_session(session_id: int, payload: SessionUpdatePayload = Body(...), d
 
 @router.delete("/sessions/{session_id}", status_code = 200)
 def delete_session(session_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    session = db.query(ChatSession).filter(ChatSession.id == session_id and ChatSession.user_id == current_user.id).first()
+    session = db.query(ChatSession).filter(
+        ChatSession.id == session_id, 
+        ChatSession.user_id == current_user.id, 
+        ChatSession.deleted_at == None
+    )
 
     if not session:
         raise HTTPException(status_code = 404, detail = "Session not found")
     
-    db.delete(session)
+    session.update({"deleted_at": datetime.now(timezone.utc)}, synchronize_session = False)
     db.commit()
     return {"message": "Session deleted successfully"}

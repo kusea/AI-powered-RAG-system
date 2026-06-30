@@ -17,6 +17,7 @@ class Document(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete = "CASCADE"), nullable = False) # Foreign key to associate with User
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    deleted_at = Column(DateTime(timezone=True), nullable=True, default = None)
 
     user = relationship("User", back_populates="documents")
     chunks = relationship("ChunkDocument", back_populates="document", cascade="all, delete-orphan")

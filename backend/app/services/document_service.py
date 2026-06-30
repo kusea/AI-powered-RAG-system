@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 import os 
 import uuid
 import pandas as pd
+from datetime import datetime, timezone
 from shutil import copyfileobj
 from fastapi import UploadFile, HTTPException
 from app.core.config import settings
@@ -248,13 +249,13 @@ def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in 
         
 
 def get_user_document(db: Session, user_id: int) -> list[Document]:
-    return db.query(Document).filter(Document.user_id == user_id).all()
+    return db.query(Document).filter(Document.user_id == user_id, Document.deleted_at == None).all()
 
 def delete_document(db: Session, document_ids: list[int], user_id: int):
-    docs = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == user_id)
+    docs = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == user_id, Document.deleted_at == None)
     if not docs:
         raise HTTPException(status_code=404, detail="Document not found in your account's storage.")
     
-    docs.delete(synchronize_session=False)
+    docs.update({"deleted_at": datetime.now(timezone.utc)}, synchronize_session = False)
     db.commit()
-    return {"message": "Delete document successfully!!!"}
+    return {"message": "Move document to trash successfully!!!"}
