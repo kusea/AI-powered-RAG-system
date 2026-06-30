@@ -2,9 +2,10 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchChatStreamAPI } from "@/services/chatAPI";
-import { FileText, Loader2, Send, User, Bot, Plus, ArrowLeft, MessageSquare} from "lucide-react";
+import { FileText, Loader2, Send, User, Bot, Plus, ArrowLeft, MessageSquare, Trash2, Edit2, MoreVertical} from "lucide-react";
 import { useRouter } from "next/router";
 import api from "@/services/APIclient";
+import {DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem} from "@/components/ui/dropdownMenu";
 
 interface SourceDocs {
     id: string;
@@ -36,6 +37,8 @@ export default function ChatAssistant(){
     const [sessions, setSessions] = useState<SessionItem[]>([]);
     const [currentSessionId, setCurrentSessionId] = useState<number| null> (null);
 
+    const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
+    const [editTitleSession, setEditTitleSession] = useState<string | null>(null);
     // Get all sessions from API during the loading time
     useEffect(() => {
         api.get(`/chat/sessions`).then((response) => {
@@ -79,6 +82,38 @@ export default function ChatAssistant(){
         setCurrentSessionId(null);
         setMessages([]);
         setInput("");
+    }
+
+    const handleDeleteSession = async (sessionId: number, e: React.MouseEvent<HTMLDivElement>) => {
+        e.stopPropagation(); // Prevent the click event from bubbling up
+        if (!confirm("Are you sure you want to delete this session?")) return;
+
+        try{
+            await api.delete(`/chat/sessions/${sessionId}`);
+            setSessions((prevSessions) => prevSessions.filter((session) => session.id !== sessionId));
+            if(currentSessionId === sessionId) handleCreateSession();
+        } catch (error) {
+            console.error("Error deleting session", error);
+        }
+    }
+
+    const handleRenameSession = (e: React.MouseEvent<HTMLDivElement>, session: SessionItem) => {
+        e.stopPropagation(); // Prevent the click event from bubbling up
+        setEditingSessionId(session.id);
+        setEditTitleSession(session.title);
+    }
+
+    const handleSaveNewSessionName = async (sessionId: number) => {
+        const trimmedTitle = editTitleSession?.trim();
+        if (!trimmedTitle) return;
+
+        try {
+            await api.put(`/chat/sessions/${sessionId}`, {title: trimmedTitle});
+            setSessions((prevSessions) => prevSessions.map((session) => session.id === sessionId ? {...session, title: trimmedTitle} : session));
+            setEditingSessionId(null);
+        } catch (error) {
+            console.error("Error renaming session", error);
+        }
     }
 
     
@@ -190,15 +225,52 @@ export default function ChatAssistant(){
                     </div>
                     <div className="space-y-1 p-2 flex-1 overflow-y-auto">
                         {sessions.map((s) => (
-                            <Button
+                            <div
                                 key={s.id}
-                                variant={currentSessionId === s.id ? "secondary" : "ghost"}
-                                className="w-full justify-start gap-2 text-left truncate flex"
-                                onClick={() => setCurrentSessionId(s.id)}
+                                className={`group flex items-center justify-between w-full rounded-lg px-3 py-1.5 transition-colors relative text-sm font-medium cursor-pointer
+                                    ${currentSessionId === s.id ? "bg-secondary text-secondary-foreground" : "hover:bg-muted/60 text-muted-foreground"}`}
+                                onClick={() => editingSessionId !== s.id && setCurrentSessionId(s.id)}
                             >
-                                <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                <span className="truncate">{s.title}</span>
-                            </Button>
+                                {editingSessionId === s.id ? (
+                                    <Input
+                                        value = {editTitleSession?.trim()}
+                                        onChange={e => setEditTitleSession(e.target.value)}
+                                        autoFocus
+                                        className="h-7 text-xs px-2 py-0 border-primary focus-visible:ring-1 focus-visible:ring-primary bg-background"
+                                        onBlur={()=> handleSaveNewSessionName(editingSessionId)}
+                                        onKeyDown = {(e) => {
+                                            if (e.key === "Enter") handleSaveNewSessionName(editingSessionId)
+                                            if (e.key === "Escape") setEditingSessionId(null)
+                                        }}
+                                        onClick = {(e) => e.stopPropagation()} // Prevent the click event from bubbling up
+                                    />
+                                ): (
+                                    <>
+                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                            <span className="truncate">{s.title}</span>
+                                        </div>
+
+                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-muted">
+                                                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-36">
+                                                    <DropdownMenuItem onClick={(e) => handleRenameSession(e, s)} className="gap-2 cursor-pointer text-xs">
+                                                        <Edit2 className="h-3.5 w-3.5" /> Rename
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={(e) => handleDeleteSession(s.id, e)} className="gap-2 cursor-pointer text-xs text-destructive focus:text-destructive">
+                                                        <Trash2 className="h-3.5 w-3.5" /> Delete chat session
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </> 
+                                )}
+                            </div>
                         ))}
                     </div>
                     
@@ -239,7 +311,7 @@ export default function ChatAssistant(){
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
                         <Bot className="h-12 w-12 text-muted-foreground/40" />
                         <div>
-                            <h2 className="text-xl font-bold text-foreground tracking-tight">Tôi có thể giúp gì cho bạn hôm nay?</h2>
+                            <h2 className="text-xl font-bold text-foreground tracking-tight">What can I help you today?</h2>
                             <p className="text-sm text-muted-foreground mt-1">
                                 Send questions to ask AI Assistant {document_id ? "about this document...": "about all of your documents..."}(RAG)
                             </p>

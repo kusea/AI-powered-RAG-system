@@ -114,7 +114,7 @@ export default function Dashboard(){
         const confirmDelete = confirm(`Are you sure you want to delete ${selectedIds.length === 1 ? "this document" : "these documents"}?`);
         if (!confirmDelete) return;
 
-        await api.delete(`/documents/delete-documents`, {data: {document_ids: selectedIds}}).then(() => {
+        await api.delete(`/documents/delete-document`, {data: {document_ids: selectedIds}}).then(() => {
             queryClient.invalidateQueries({queryKey: ["documents"]});
             setSelectedIds([]);
         }).catch(err => alert(`Failed to delete documents: ${err.message}`));

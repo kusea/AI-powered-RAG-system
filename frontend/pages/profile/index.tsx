@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { User, Save, CheckCircle } from "lucide-react";
+import { User, Save, CheckCircle, AlertCircle} from "lucide-react";
 import api from "@/services/APIclient";
 
 export default function ProfilePage(){
@@ -37,8 +37,10 @@ export default function ProfilePage(){
             </div>
 
             {status && (
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 rounded-xl flex items-center gap-2 text-sm font-medium">
-                    <CheckCircle className="h-5 w-5" /> {status}
+                <div className={`p-4 border rounded-xl flex items-center gap-2 text-sm font-medium
+                        ${status.startsWith("Failed") ? "bg-rose-500/10 border-rose-500/20 text-rose-600" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-60" }`}>
+                        {status.startsWith("Failed") ? (<AlertCircle className="h-5 w-5"/>) : (<CheckCircle className="h-5 w-5" />)}
+                        {status}
                 </div>
             )}
 

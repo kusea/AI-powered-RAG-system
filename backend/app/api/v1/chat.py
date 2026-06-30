@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
@@ -8,6 +8,7 @@ from app.services import rag_service
 from app.schemas.document import ChunkEmbeddingResponse
 from app.models import ChatSession, ChatMessage, User
 from app.core.security import get_current_user
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -68,3 +69,29 @@ def create_chat_session(title: str, current_user: User = Depends(get_current_use
 @router.get("/sessions/{session_id}/messages")
 def get_session_messages(session_id: int, db: Session = Depends(get_db)):
     return db.query(ChatMessage).filter(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at.asc()).all()
+
+class SessionUpdatePayload(BaseModel):
+    title: str
+
+@router.put("/sessions/{session_id}", status_code = 200)
+def rename_session(session_id: int, payload: SessionUpdatePayload = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    session = db.query(ChatSession).filter(ChatSession.id == session_id and ChatSession.user_id == current_user.id).first()
+
+    if not session:
+        raise HTTPException(status_code = 404, detail = "Session not found")
+    
+    session.title = payload.title
+    db.commit()
+    db.refresh(session)
+    return {"message": "Session renamed successfully", "session": session}
+
+@router.delete("/sessions/{session_id}", status_code = 200)
+def delete_session(session_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    session = db.query(ChatSession).filter(ChatSession.id == session_id and ChatSession.user_id == current_user.id).first()
+
+    if not session:
+        raise HTTPException(status_code = 404, detail = "Session not found")
+    
+    db.delete(session)
+    db.commit()
+    return {"message": "Session deleted successfully"}

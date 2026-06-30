@@ -141,7 +141,8 @@ def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: 
         elif file_extension in ["csv", "xls", "xlsx"]:
             df = pd.read_csv(filepath) if file_extension == "csv" else pd.read_excel(filepath)
             for idx, row in df.iterrows():
-                row_text = ", ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
+                row_dict = row.to_dict()
+                row_text = ", ".join([f"{col}: {val}" for col, val in row_dict.items() if pd.notna(val)])
                 if row_text:
                     chunks.append({
                         "text": row_text,
@@ -180,9 +181,11 @@ def extract_full_text(filepath: str):
                 full_text += "\n".join(slide_text)
         elif file_extension in ["csv", "xls", "xlsx"]:
             df = pd.read_csv(filepath) if file_extension == "csv" else pd.read_excel(filepath)
+            
             row_list = []
-            for row in df.iterrows():
-                row_text = ", ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
+            for idx, row in df.iterrows():
+                row_dict = row.to_dict()
+                row_text = ", ".join([f"{col}: {val}" for col, val in row_dict.items() if pd.notna(val)])
                 row_list.append(row_text) if row_text else None
             full_text = "\n".join(row_list)
     except Exception as e:
@@ -248,11 +251,10 @@ def get_user_document(db: Session, user_id: int) -> list[Document]:
     return db.query(Document).filter(Document.user_id == user_id).all()
 
 def delete_document(db: Session, document_ids: list[int], user_id: int):
-    docs = db.query(Document).filter(Document.id.in_(document_ids) and Document.user_id == user_id).all()
+    docs = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == user_id)
     if not docs:
         raise HTTPException(status_code=404, detail="Document not found in your account's storage.")
     
-    for doc in docs:
-        db.delete(doc)
+    docs.delete(synchronize_session=False)
     db.commit()
     return {"message": "Delete document successfully!!!"}

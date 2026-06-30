@@ -16,11 +16,11 @@ def get_profile(current_user: User = Depends(get_current_user),db: Session = Dep
 
 @router.put("/me")
 def update_profile(profile: ProfileUpdater, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == profile.email).all()
+    user = db.query(User).filter(User.email == profile.email).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    for us in user:
-        us.username = profile.username
+    
+    user.username = profile.username
 
     db.commit()
     db.refresh(user)

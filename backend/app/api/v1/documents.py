@@ -1,8 +1,9 @@
 #Router to define endpoints when frontend call to backend for data
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.document import ChunkEmbeddingResponse, DocumentResponse
+from pydantic import BaseModel
 
 import os;
 from app.services import document_service;
@@ -20,12 +21,12 @@ def create_document_embedding(item: ChunkEmbeddingResponse, db: Session = Depend
 
 @router.post("/upload", response_model = DocumentResponse)
 def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    allowed_extensions = [".pdf", ".docx", ".txt", ".pptx", ".xlsx", ".csv", ".html", ".xls"]
+    allowed_extensions = [".pdf", ".docx", ".txt", ".pptx", ".xlsx", ".csv", ".html", ".xls", ".md"]
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in allowed_extensions:
         raise HTTPException(
             status_code = status.HTTP_400_BAD_REQUEST, 
-            detail = "Invalid file type. Only PDF, DOCX, TXT, PPTX, XLSX, CSV, HTML, XLS files are allowed.")
+            detail = "Invalid file type. Only PDF, DOCX, TXT, PPTX, XLSX, CSV, HTML, XLS, MD, XLS files are allowed.")
     
     try:
         return document_service.save_loaded_file(db, file, current_user.id, background_tasks)
@@ -44,6 +45,9 @@ def list_document(db: Session = Depends(get_db), current_user: User = Depends(ge
 def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):
     return db.query(Document).filter(Document.id == document_id and Document.user_id == current_user.id).first()
 
+class DeleteDocPayload(BaseModel):
+    document_ids: List[int]
+
 @router.delete("/delete-document", status_code = status.HTTP_200_OK)
-def delete_document(document_id: List[int], current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return document_service.delete_document(db, document_id, current_user.id)
+def delete_document(payload: DeleteDocPayload = Body(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return document_service.delete_document(db, payload.document_ids, current_user.id)
