@@ -11,7 +11,7 @@ from backend.app.init import auto_purge_expire_chat
 
 from app.middlewares.rate_limiter import RateLimitMiddleware
 
-from app.api.v1 import chat, documents, auth, profile
+from app.api.v1 import chat, documents, auth, profile, notification
 
 __all__ = ["app", "Base", "Document", "User", "UserAccount"]
 
@@ -53,6 +53,7 @@ app.include_router(chat.router, prefix = "/api/v1/chat", tags = ["AI Chat and Ve
 app.include_router(documents.router, prefix = "/api/v1/documents", tags = ["Documents and Embeddings"])
 app.include_router(auth.router, prefix = "/api/v1/auth", tags = ["Authentication"])
 app.include_router(profile.router, prefix = "/api/v1/profile", tags = ["Profile"])
+app.include_router(notification.router, prefix = "/api/v1/notification", tags = ["Notification"])
 
 @app.get("/", tags = ["Health Check"])
 def read_root():

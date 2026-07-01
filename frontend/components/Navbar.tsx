@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect} from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient} from "@tanstack/react-query";
 import { useRouter } from "next/router";
@@ -7,11 +7,19 @@ import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "./ui/dropdownMenu";
 
 import { getAuthToken } from "../services/authAPI";
+import API_URL from "@/services/APIclient";
+
+interface NotificationItem {
+    id: number;
+    text: string;
+    type: "receiver" | "sender";
+    delta_time: string;
+}
 
 export default function NavBar() {
     const router = useRouter();
     const queryClient = useQueryClient();
-    const [notifications, setNotifications] = useState<{"id": number, "text": string, "type": "receiver" | "sender", "delta_time": string}[]>([]);
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
     const {data: token} = useQuery({
         queryKey: ["authToken"],
@@ -26,6 +34,26 @@ export default function NavBar() {
         queryClient.invalidateQueries({queryKey: ["authToken"]});
         router.push("/dashboard");
     };
+
+    useEffect(() => {
+        const eventSource = new EventSource(`${API_URL}/notifications/stream`);
+
+        eventSource.onmessage = (event ) => {
+            const newNotification: NotificationItem = JSON.parse(event.data);
+            try {
+                setNotifications((prevNotifications) => [newNotification, ...prevNotifications]);
+                console.log("New notification received: ", newNotification.text);
+            } catch (error) {
+                console.error("Error parsing notification data: ", error);
+            }
+        };
+
+        eventSource.onerror = (error) => {
+            console.error("EventSource failed to connect to SSE, trying to reconnect...", error);
+        };
+
+        return () => eventSource.close();
+    }, []);
 
     return (
         <nav className="bg-blue-400 text-white backdrop-blur sticky top-0 z-50 border-b">
@@ -84,6 +112,7 @@ export default function NavBar() {
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="relative">
                                         <Bell className="h-5 w-5"/>
+                                        {/* Show a red dot if there are notifications */}
                                         {notifications.length > 0 && (
                                             <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive" />
                                         )}
@@ -97,12 +126,14 @@ export default function NavBar() {
                                         <DropdownMenuItem className="text-muted-foreground cursor-default">
                                             No new notifications
                                         </DropdownMenuItem>): (
-                                            notifications.map((notif) =>(
-                                                <DropdownMenuItem key = {notif.id} className = "flex flex-col items-start p-3 gap-1 cursor-pointer">
-                                                    <div className = "text-sm text-foreground">{notif.text}</div>
-                                                    <span className = "text-xs text-muted-foreground">{notif.delta_time}</span>
-                                                </DropdownMenuItem>
-                                            ))
+                                            <div className = "max-h-72 overflow-y-auto">
+                                                {notifications.map((notif) =>(
+                                                    <DropdownMenuItem key = {notif.id} className = "flex flex-col items-start p-3 gap-1 cursor-pointer">
+                                                        <div className = "text-sm text-foreground">{notif.text}</div>
+                                                        <span className = "text-xs text-muted-foreground">{notif.delta_time}</span>
+                                                    </DropdownMenuItem>
+                                                ))}
+                                            </div>
                                         )}
                                 </DropdownMenuContent>
                             </DropdownMenu>

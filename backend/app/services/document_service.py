@@ -2,10 +2,12 @@
 from sqlalchemy.orm import Session
 from app.models import Document, ChunkDocument, User, DocumentShare
 from app.schemas.document import ChunkEmbeddingCreate, DocumentShareCreate
+from app.core.notification_mannager import notification_manager
 from sentence_transformers import SentenceTransformer
 
 import os 
 import uuid
+import asyncio
 import pandas as pd
 from datetime import datetime, timezone
 from shutil import copyfileobj
@@ -270,20 +272,21 @@ def restore_document(db: Session, document_ids: list[int], user_id: int):
     return {"message": "Restore document successfully!!!"}
 
 def shared_document_to_user(shared_data: DocumentShareCreate, db: Session, user_id: int):
+    sender = db.query(User).filter(User.id == user_id).first()
+    if not sender:
+        raise HTTPException(status_code=404, detail="Sender not found.")
+
     doc = db.query(Document).filter(
         Document.id == shared_data.document_id,
         Document.user_id == user_id,
         Document.deleted_at == None
     ).first()
-
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found in your account's storage.")
     
     receiver = db.query(User).filter(User.email == shared_data.shared_to_email).first()
-
     if not receiver:
         raise HTTPException(status_code=404, detail="Receiver not found.")
-    
     if receiver.id == user_id:
         raise HTTPException(status_code=400, detail="You cannot share document to yourself.")
     
@@ -297,19 +300,59 @@ def shared_document_to_user(shared_data: DocumentShareCreate, db: Session, user_
         existing_share.permission = shared_data.permission
         db.commit()
         db.refresh(existing_share)
-        return existing_share
+        share = existing_share
+    else: 
+        new_share = DocumentShare(
+            shared_by_id = user_id,
+            shared_to_id = receiver.id,
+            document_id = shared_data.document_id,
+            permission = shared_data.permission
+        )
+        doc.shares.append(new_share)
+        db.add(new_share)
+        db.commit()
+        db.refresh(new_share)
+        share = new_share
+
+    def toStringTimeDelta(time_share: datetime):
+        delta = datetime.now(timezone.utc) - time_share
+        days = delta.days
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+        seconds = delta.seconds % 60
+        if days > 0:
+            return f"{days} day(s) ago"
+        elif hours > 0:
+            return f"{hours} hour(s) ago"
+        elif minutes > 0:
+            return f"{minutes} minute(s) ago"
+        elif seconds > 0:
+            return f"{seconds} second(s) ago"
+        else:
+            return "Just now"
+
+    # Emit a signal to send a notification in the background
+    asyncio.run_coroutine_threadsafe(
+        notification_manager.send_notification(
+            receiver.id,{
+                "id": share.id,
+                "text": f"{sender.email} shared a document '{doc.title}' with you.",
+                "type": "received",
+                "delta_time": toStringTimeDelta(share.created_at),
+            }
+        ))
     
-    new_share = DocumentShare(
-        shared_by_id = user_id,
-        shared_to_id = receiver.id,
-        document_id = shared_data.document_id,
-        permission = shared_data.permission
+    asyncio.run_coroutine_threadsafe(
+        notification_manager.send_notification(
+            user_id,{
+                "id": share.id,
+                "text": f"You shared a document '{doc.title}' with {receiver.email}.",
+                "type": "sent",
+                "delta_time": toStringTimeDelta(share.created_at)
+            }
+        )
     )
-    doc.shares.append(new_share)
-    db.add(new_share)
-    db.commit()
-    db.refresh(new_share)
-    return new_share
+    return share
 
 def get_shared_document(db: Session, user_id: int):
     return db.query(Document).join(DocumentShare, Document.id == DocumentShare.document_id).filter(
