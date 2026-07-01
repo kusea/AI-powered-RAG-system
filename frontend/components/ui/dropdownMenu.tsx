@@ -7,13 +7,10 @@ const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 const DropdownMenuGroup = DropdownMenuPrimitive.Group
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal
 
-const DropdownMenuContent = React.forwardRef<
-    React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-    React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
+const DropdownMenuContent = ({ className, sideOffset = 4, ...props }:
+    React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>) => (
     <DropdownMenuPrimitive.Portal>
         <DropdownMenuPrimitive.Content
-        ref={ref}
         sideOffset={sideOffset}
         className={cn(
             "z-50 min-w-32 overflow-hidden rounded-md border p-1 text-popover-foreground shadow-md animate-in fade-in-80 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 bg-white dark:bg-zinc-950",
@@ -22,26 +19,45 @@ const DropdownMenuContent = React.forwardRef<
         {...props}
         />
     </DropdownMenuPrimitive.Portal>
-))
+)
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName
 
-const DropdownMenuItem = React.forwardRef<
-    React.ElementRef<typeof DropdownMenuPrimitive.Item>,
-    React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
-        inset?: boolean
-    }
-    >(({ className, inset, ...props }, ref) => (
+const DropdownMenuItem = ({ className, inset,...props}: 
+    React.ComponentPropsWithRef<typeof DropdownMenuPrimitive.Item> & {
+    inset?: boolean
+}) => (
     <DropdownMenuPrimitive.Item
-        ref={ref}
         className={cn(
-        "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none dat-disabled:opacity-50 hover:bg-slate-100 dark:hover:bg-zinc-800",
-        inset && "pl-8",
-        className
+            "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+            inset && "pl-8",
+            className
         )}
         {...props}
     />
-    ))
+)
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName
+
+const DropdownMenuLabel = ({className, inset, ...props}: 
+    React.ComponentPropsWithRef<typeof DropdownMenuPrimitive.Label> & {inset?: boolean}) => (
+        <DropdownMenuPrimitive.Label
+            className = {cn("px-2 py-1.5 text-sm font-semibold",
+                inset && "pl-8",
+                className)}
+            {...props}
+        />
+    )
+DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName
+
+const DropdownMenuSeparator = ({
+    className,
+    ...props
+}: React.ComponentPropsWithRef<typeof DropdownMenuPrimitive.Separator>) => (
+    <DropdownMenuPrimitive.Separator
+        className={cn("-mx-1 my-1 h-px bg-muted", className)}
+        {...props}
+    />
+) 
+DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName
 
 export {
     DropdownMenu,
@@ -50,4 +66,6 @@ export {
     DropdownMenuItem,
     DropdownMenuGroup,
     DropdownMenuPortal,
+    DropdownMenuLabel,
+    DropdownMenuSeparator
 }

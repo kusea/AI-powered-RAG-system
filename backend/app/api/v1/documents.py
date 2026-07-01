@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.document import ChunkEmbeddingResponse, DocumentResponse
+from app.schemas.document import ChunkEmbeddingResponse, DocumentResponse, DocumentShareResponse, DocumentShareCreate
 from pydantic import BaseModel
 
 import os;
@@ -51,3 +51,18 @@ class DeleteDocPayload(BaseModel):
 @router.delete("/delete-document", status_code = status.HTTP_200_OK)
 def delete_document(payload: DeleteDocPayload = Body(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return document_service.delete_document(db, payload.document_ids, current_user.id)
+
+class RestoreDocPayload(BaseModel):
+    document_ids: List[int]
+
+@router.put("/restore-document", status_code = status.HTTP_200_OK)
+def restore_document(payload: RestoreDocPayload = Body(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return document_service.restore_document(db, payload.document_ids, current_user.id)
+
+@router.post("/share", response_model = DocumentShareResponse)
+def share_document(document: DocumentShareCreate = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return document_service.shared_document_to_user(document, db, current_user.id)
+
+@router.get("/shared-to-me", response_model = List[DocumentShareResponse])
+def shared_to_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return document_service.get_shared_document(db, current_user.id)

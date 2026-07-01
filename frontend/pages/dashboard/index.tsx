@@ -2,10 +2,11 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Trash2, Bot} from "lucide-react";
+import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Trash2, Bot, MoreVertical, Info, Share2} from "lucide-react";
 import { uploadDocumentAPI, fetchDocumentAPI } from "@/services/documentAPI";
 import { getAuthToken } from "@/services/authAPI";
 import { useRouter } from "next/router";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from "@/components/ui/dropdownMenu";
 import axios from "axios";
 import api from "@/services/APIclient";
 
@@ -273,27 +274,28 @@ export default function Dashboard(){
                                         </p>
                                     </div>
                                 </div>
-                                <div className="px-6 py-6 whitespace-nowrap flex items-center pt-3 mt-4 gap-2">
-                                    {/* <Link href={`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`}>
-                                        <Button size="sm" variant = "outline" className="text-amber-500 hover:text-amber-600 border-amber-500/30 gap-1">
-                                            
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant = "ghost" size = "icon" className = "h-8 w-8 p-0">
+                                        <MoreVertical className = "h-4 w-4" />
                                         </Button>
-                                    </Link> */}
+                                    </DropdownMenuTrigger>
 
-                                    <button
-                                        title = "Ask AI" 
-                                        onClick = {() => router.push(`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`)}
-                                        className="text-primary hover:text-primary/80">
-                                        <MessageSquare className="h-4 w-4 cursor-pointer" />
-                                    </button>
-
-                                    <div className="spacex-x-4 bg-muted" />
-
-                                    <Button className="self-center md:self-center md:mt-0" variant = "outline" size = "sm"
-                                            onClick = {() => router.push(`/documents/${doc.id}`)}>
-                                        Details
-                                    </Button>
-                                </div>
+                                    <DropdownMenuContent align = "end" className = "w-56">
+                                        <DropdownMenuItem onClick = {() => router.push(`/chat/document_ids=${doc.id}&title=${encodeURIComponent(doc.title)}`)} className = "cursor-pointer gap-2">
+                                            <MessageSquare className = "h-4 w-4" />
+                                            Ask AI about this document
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick = {() => router.push(`/document/${doc.id}`)} className = "cursor-pointer gap-2">
+                                            <Info className = "h-4 w-4" />
+                                            View document details
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className = "cursor-pointer gap-2">
+                                            <Share2 className = "h-4 w-4" />
+                                            Share document
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         )})}
                     </div>

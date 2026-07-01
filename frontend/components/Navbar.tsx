@@ -2,15 +2,16 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient} from "@tanstack/react-query";
 import { useRouter } from "next/router";
-import { User, LogOut, Settings, Trash2, Database, MessageSquare } from "lucide-react";
+import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon} from "lucide-react";
 import { Button } from "./ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "./ui/dropdownMenu";
 
 import { getAuthToken } from "../services/authAPI";
 
 export default function NavBar() {
     const router = useRouter();
     const queryClient = useQueryClient();
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [notifications, setNotifications] = useState<{"id": number, "text": string, "type": "receiver" | "sender", "delta_time": string}[]>([]);
 
     const {data: token} = useQuery({
         queryKey: ["authToken"],
@@ -23,7 +24,6 @@ export default function NavBar() {
     const handleLogout = () => {
         localStorage.removeItem("token");
         queryClient.invalidateQueries({queryKey: ["authToken"]});
-        setIsDropdownOpen(false);
         router.push("/dashboard");
     };
 
@@ -59,6 +59,16 @@ export default function NavBar() {
                             AI Assistant
                         </button>
                         
+                        <button
+                            onClick={() => router.push("/chat")}
+                            className={`flex items-center gap-2 px-5 h-full text-sm font-medium transition-colors
+                                ${router.pathname === "/chat"
+                                    ? "bg-blue-800 text-white"
+                                    : "text-blue-100 hover:bg-blue-700 hover:text-white"
+                                }`}>
+                            <Share2 className="h-4 w-4" />
+                            Shared to me
+                        </button>
                     </nav>
                 </div>
 
@@ -69,33 +79,57 @@ export default function NavBar() {
                             <Link href="/signup" passHref><Button className="hover:bg-muted hover:text-foreground cursor-pointer" size = "sm">Sign Up</Button></Link>
                         </div>
                     ): (
-                        <div>
-                            <button title="User Settings"
-                                    onClick = {() => setIsDropdownOpen(!isDropdownOpen)}
-                                    className="h-9 w-9 rounded-full bg-origin-content border-primary/20 
-                                    border-2 flex items-center justify-center focus:outline-none hover:bg-primary/20 transition-colors">
-                                <User className="h-5 w-5 text-primary" />
-                            </button>
+                        <div className = "flex items-center space-x-4">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="relative">
+                                        <Bell className="h-5 w-5"/>
+                                        {notifications.length > 0 && (
+                                            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive" />
+                                        )}
+                                    </Button>
+                                </DropdownMenuTrigger>
 
-                            {isDropdownOpen && (
-                                <>
-                                    <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)}></div>
-                                    <div className="absolute right-0 mt-2 w-56 bg-popover rounded-xl border shadow-lg py-1.5 z-20 text-sm">
-                                    <button onClick={() => router.push("/profile")} className="w-full px-3 py-2 text-black hover:bg-muted text-left flex items-center gap-2">
-                                        <Settings className="h-4 w-4" /> User Profile
-                                    </button>
+                                <DropdownMenuContent className="w-80" align="end">
+                                    <DropdownMenuLabel>Share notifications</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {notifications.length === 0 ? (
+                                        <DropdownMenuItem className="text-muted-foreground cursor-default">
+                                            No new notifications
+                                        </DropdownMenuItem>): (
+                                            notifications.map((notif) =>(
+                                                <DropdownMenuItem key = {notif.id} className = "flex flex-col items-start p-3 gap-1 cursor-pointer">
+                                                    <div className = "text-sm text-foreground">{notif.text}</div>
+                                                    <span className = "text-xs text-muted-foreground">{notif.delta_time}</span>
+                                                </DropdownMenuItem>
+                                            ))
+                                        )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="relative h-8 w-8 rounded-full bg-muted">
+                                        <UserIcon className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
 
-                                    <button onClick={() => { alert("Hãy nhấn nút 'Xóa' trực tiếp bên cạnh từng tài liệu ở danh sách phía dưới!"); setIsDropdownOpen(false); }}
-                                            className="w-full px-3 py-2 hover:bg-muted text-left flex items-center gap-2 text-amber-600">
-                                        <Trash2 className="h-4 w-4" /> Delete uploaded files
-                                    </button>
+                                    <DropdownMenuSeparator />
 
-                                    <button onClick={handleLogout} className="w-full px-3 py-2 hover:bg-destructive/10 text-destructive text-left flex items-center gap-2 font-semibold">
-                                        <LogOut className="h-4 w-4" /> Logout
-                                    </button>
-                                    </div>
-                                </>
-                            )}
+                                    <DropdownMenuItem onClick={() => router.push("/profile")}>
+                                        <Settings className="mr-2 h-4 w-4" />
+                                        User Profile
+                                    </DropdownMenuItem>
+
+                                    <DropdownMenuSeparator />
+
+                                    <DropdownMenuItem onClick={handleLogout} className="text-destructive">
+                                        <LogOut className="mr-2 h-4 w-4" />
+                                        Logout
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     )}
                 </div>

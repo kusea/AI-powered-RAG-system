@@ -1,7 +1,7 @@
 #Dỉrectly work with SQLAlchemy to store and query vector
 from sqlalchemy.orm import Session
-from app.models import Document, ChunkDocument
-from app.schemas.document import ChunkEmbeddingCreate
+from app.models import Document, ChunkDocument, User, DocumentShare
+from app.schemas.document import ChunkEmbeddingCreate, DocumentShareCreate
 from sentence_transformers import SentenceTransformer
 
 import os 
@@ -259,3 +259,61 @@ def delete_document(db: Session, document_ids: list[int], user_id: int):
     docs.update({"deleted_at": datetime.now(timezone.utc)}, synchronize_session = False)
     db.commit()
     return {"message": "Move document to trash successfully!!!"}
+
+def restore_document(db: Session, document_ids: list[int], user_id: int):
+    docs = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == user_id, Document.deleted_at != None)
+    if not docs:
+        raise HTTPException(status_code=404, detail="Document not found in your account's trash.")
+    
+    docs.update({"deleted_at": None}, synchronize_session = False)
+    db.commit()
+    return {"message": "Restore document successfully!!!"}
+
+def shared_document_to_user(shared_data: DocumentShareCreate, db: Session, user_id: int):
+    doc = db.query(Document).filter(
+        Document.id == shared_data.document_id,
+        Document.user_id == user_id,
+        Document.deleted_at == None
+    ).first()
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found in your account's storage.")
+    
+    receiver = db.query(User).filter(User.email == shared_data.shared_to_email).first()
+
+    if not receiver:
+        raise HTTPException(status_code=404, detail="Receiver not found.")
+    
+    if receiver.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot share document to yourself.")
+    
+    existing_share = db.query(DocumentShare).filter(
+        DocumentShare.document_id == shared_data.document_id,
+        DocumentShare.shared_to_id == receiver.id,
+        DocumentShare.shared_by_id == user_id
+    ).first()
+
+    if existing_share:
+        existing_share.permission = shared_data.permission
+        db.commit()
+        db.refresh(existing_share)
+        return existing_share
+    
+    new_share = DocumentShare(
+        shared_by_id = user_id,
+        shared_to_id = receiver.id,
+        document_id = shared_data.document_id,
+        permission = shared_data.permission
+    )
+    doc.shares.append(new_share)
+    db.add(new_share)
+    db.commit()
+    db.refresh(new_share)
+    return new_share
+
+def get_shared_document(db: Session, user_id: int):
+    return db.query(Document).join(DocumentShare, Document.id == DocumentShare.document_id).filter(
+        DocumentShare.shared_to_id == user_id,
+        Document.deleted_at == None
+    ).all()
+    
