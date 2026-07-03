@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider} from "@tanstack/react-query";
 import NavBar from "@/components/Navbar";  
 import { useRouter } from "next/router";
 import { Loader2 } from "lucide-react"
+import Footer from "@/components/Footer";
 
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -57,7 +58,10 @@ export default function App({ Component, pageProps }: AppProps) {
             <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
                 <div className="h-screen overflow-auto bg-background text-foreground flex flex-col">
                     <NavBar />
-                    <Component {...pageProps} />
+                    <div className = "flex-1 w-full pb-12">
+                        <Component {...pageProps} />
+                    </div>
+                    <Footer />
                 </div>
             </ThemeProvider>
         </QueryClientProvider>

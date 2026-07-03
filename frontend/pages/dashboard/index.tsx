@@ -145,7 +145,7 @@ export default function Dashboard(){
         if (!sharingDoc || !shareEmail.trim()) return;
         setIsSubmittingShare(true);
 
-        await api.post(`/documents/share-document`, {document_id: sharingDoc.id, email: shareEmail, permission: sharePermission})
+        await api.post(`/documents/share`, {document_id: sharingDoc.id, email: shareEmail, permission: sharePermission})
             .then(() => {
             alert(`Successfully shared ${sharingDoc.title} with ${shareEmail}.`);
             setIsShareModalOpen(false);
@@ -325,7 +325,7 @@ export default function Dashboard(){
                                                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in-50">
                                                     <div className="bg-card border text-card-foreground rounded-xl w-full max-w-md p-6 shadow-lg relative animate-in zoom-in-95">
                                                         <button 
-                                                            title = "Open Share Modal"
+                                                            title = "Close Share Modal"
                                                             onClick={() => setIsShareModalOpen(false)}
                                                             className="absolute top-4 right-4 text-muted-foreground hover:text-foreground rounded-md p-1"
                                                         >
@@ -334,17 +334,17 @@ export default function Dashboard(){
 
                                                         <div className="flex items-center gap-2 mb-4">
                                                             <Share2 className="h-5 w-5 text-primary" />
-                                                            <h3 className="text-lg font-bold tracking-tight">Chia sẻ tài liệu</h3>
+                                                            <h3 className="text-lg font-bold tracking-tight">Share documents</h3>
                                                         </div>
 
                                                         <p className="text-sm text-muted-foreground mb-4 truncate">
-                                                            Tài liệu: <strong className="text-foreground font-medium">{sharingDoc.title}</strong>
+                                                            Document: <strong className="text-foreground font-medium">{sharingDoc.title}</strong>
                                                         </p>
 
                                                         <form onSubmit={handleConfirmShare} className="space-y-4">
                                                             <div className="space-y-1.5">
                                                                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                                                                    <Mail className="h-3 w-3" /> Email người nhận
+                                                                    <Mail className="h-3 w-3" /> Receiver Email
                                                                 </label>
                                                                 <input
                                                                     type="email"
@@ -381,7 +381,7 @@ export default function Dashboard(){
                                                                     Cancel
                                                                 </Button>
                                                                 <Button type="submit" disabled={isSubmittingShare} className="gap-1">
-                                                                    {isSubmittingShare ? "Chỉ sẻ..." : "Xác nhận chia sẻ"}
+                                                                    {isSubmittingShare ? "Share" : "Confirm"}
                                                                 </Button>
                                                             </div>
                                                         </form>

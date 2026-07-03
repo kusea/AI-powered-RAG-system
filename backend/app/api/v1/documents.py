@@ -41,10 +41,6 @@ def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(.
 def list_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return document_service.get_user_document(db, current_user.id) # Use for deleting multiple documents, if only 1 document, pass 1 value into list
 
-@router.get("/{document_id}", response_model = DocumentResponse)
-def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):
-    return db.query(Document).filter(Document.id == document_id and Document.user_id == current_user.id).first()
-
 class DeleteDocPayload(BaseModel):
     document_ids: List[int]
 
@@ -67,6 +63,11 @@ def share_document(document: DocumentShareCreate = Body(...), db: Session = Depe
 def shared_to_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return document_service.get_shared_document(db, current_user.id)
 
-@router.get("/trash")
+@router.get("/trash", status_code = status.HTTP_200_OK)
 def get_trash_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return document_service.get_trash_document(db, current_user.id)
+
+
+@router.get("/{document_id}", response_model = DocumentResponse)
+def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):
+    return db.query(Document).filter(Document.id == document_id and Document.user_id == current_user.id).first()

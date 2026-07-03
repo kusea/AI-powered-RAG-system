@@ -380,10 +380,16 @@ def get_shared_document(db: Session, user_id: int):
     ).all()
     
 def get_trash_document(db: Session, user_id: int):
-    return db.query(Document).join(DocumentShare, Document.id == DocumentShare.document_id).filter(
-        or_(
-            DocumentShare.shared_to_id == user_id, 
-            Document.user_id == user_id
-        ),
-        Document.deleted_at != None
-    ).all()
+    share_doc_table = db.query(Document).join(DocumentShare)
+    exist_stmt = share_doc_table.exists()
+    is_exist = db.query(exist_stmt).scalar()
+
+    if is_exist:
+        return share_doc_table.filter(
+            or_(
+                DocumentShare.shared_to_id == user_id, 
+                Document.user_id == user_id
+            ),
+            Document.deleted_at != None
+        ).all()
+    return db.query(Document).filter(Document.user_id == user_id, Document.deleted_at != None).all()

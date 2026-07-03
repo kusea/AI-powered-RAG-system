@@ -30,7 +30,7 @@ export default function DocumentTrash() {
     })
 
     const restoreMutation = useMutation({
-        mutationFn: async (idsRestore: number[]) => await api.post(`/documents/restore`, {document_ids: idsRestore}),
+        mutationFn: async (idsRestore: number[]) => await api.put(`/documents/restore-document`, {document_ids: idsRestore}),
         onSuccess: () => {
             alert(`Successfully restore ${trashDocs?.length === 1 ? "this document" : "these documents"}`);
             setSelectedIds([]);
@@ -75,7 +75,7 @@ export default function DocumentTrash() {
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-20 border rounded-xl bg-muted/10">
                         <Loader2 className="h-6 w-6 animate-spin text-primary mb-2" />
-                        <p className="text-sm text-muted-foreground">Đang tải danh sách...</p>
+                        <p className="text-sm text-muted-foreground">Loading...</p>
                     </div>
                 ) : isError ? (
                     <div className = "text-center py-16 border rounded-xl bg-destructive/5 border-destructive/20 text-destructive">
@@ -83,7 +83,7 @@ export default function DocumentTrash() {
                     </div>
                 ) : trashDocs.length === 0 ? (
                     <div className="text-center py-16 border border-dashed rounded-xl text-muted-foreground">
-                        Thùng rác trống. Không có tài liệu nào bị xóa.
+                        Empty bin. There are no deleted documents.
                     </div>
                 ) : (
                     <div className="border rounded-lg bg-card overflow-hidden">
