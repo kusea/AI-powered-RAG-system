@@ -66,3 +66,7 @@ def share_document(document: DocumentShareCreate = Body(...), db: Session = Depe
 @router.get("/shared-to-me", response_model = List[DocumentShareResponse])
 def shared_to_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return document_service.get_shared_document(db, current_user.id)
+
+@router.get("/trash")
+def get_trash_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return document_service.get_trash_document(db, current_user.id)

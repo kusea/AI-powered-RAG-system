@@ -1,7 +1,6 @@
 from app.core.database import SessionLocal
 from datetime import datetime, timedelta, timezone
 from app.models import Document, ChatSession
-from fastapi import BackgroundTasks
 import os
 
 def auto_purge_expire_trash():

@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Trash2, Bot, MoreVertical, Info, Share2} from "lucide-react";
+import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, ShieldAlert, MessageSquare, Trash2, Bot, MoreVertical, Info, Share2, Mail, Shield, X} from "lucide-react";
 import { uploadDocumentAPI, fetchDocumentAPI } from "@/services/documentAPI";
 import { getAuthToken } from "@/services/authAPI";
 import { useRouter } from "next/router";
@@ -23,6 +23,12 @@ export default function Dashboard(){
     const router = useRouter();
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [uploadStatus, setUploadStatus] = useState<{ "type": "success" | "error" | "warning", "message": string } | null>(null);
+
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [sharingDoc, setSharingDoc] = useState<DocumentItem | null>(null);
+    const [shareEmail, setShareEmail] = useState("");
+    const [sharePermission, setSharePermission] = useState("read");
+    const [isSubmittingShare, setIsSubmittingShare] = useState(false);
 
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const handleToggleSelect = ((id: number) => {
@@ -124,7 +130,28 @@ export default function Dashboard(){
     const handleBulkAskAI = async () => {
         if (selectedIds.length === 0) return; 
         const idsQuery = selectedIds.join(",");
-        router.push(`/chat/document_ids=${idsQuery}&mode=multi`);
+        router.push(`/chat?document_ids=${idsQuery}&mode=multi`);
+    }
+
+    const handleOpenShareModal = (doc: DocumentItem) => {
+        setSharePermission("read");
+        setIsShareModalOpen(true);
+        setSharingDoc(doc);
+        setShareEmail("");
+    }
+
+    const handleConfirmShare: React.ComponentProps<"form">["onSubmit"] = async (e) => {
+        e.preventDefault();
+        if (!sharingDoc || !shareEmail.trim()) return;
+        setIsSubmittingShare(true);
+
+        await api.post(`/documents/share-document`, {document_id: sharingDoc.id, email: shareEmail, permission: sharePermission})
+            .then(() => {
+            alert(`Successfully shared ${sharingDoc.title} with ${shareEmail}.`);
+            setIsShareModalOpen(false);
+            })
+            .catch(err => alert(`Failed to share document: ${err.message}`))
+            .finally(() => setIsSubmittingShare(false));
     }
 
     return (
@@ -251,7 +278,7 @@ export default function Dashboard(){
                                 className = {`flex relative items-center justify-between border p-4 pl-6 rounded-xl hover:bg-muted/50 transition-colors
                                             ${isChecked ? "border-primary bg-primary/5 shadow-sm" : "hover:bg-muted/50"}`}
                             >
-                                <div className="absolute top-4 right-4 z-10">
+                                <div className="absolute top-2 right-2 z-10">
                                     <input
                                         title="Select document"
                                         type="checkbox"
@@ -282,17 +309,86 @@ export default function Dashboard(){
                                     </DropdownMenuTrigger>
 
                                     <DropdownMenuContent align = "end" className = "w-56">
-                                        <DropdownMenuItem onClick = {() => router.push(`/chat/document_ids=${doc.id}&title=${encodeURIComponent(doc.title)}`)} className = "cursor-pointer gap-2">
+                                        <DropdownMenuItem onClick = {() => router.push(`/chat?document_ids=${doc.id}&title=${encodeURIComponent(doc.title)}`)} className = "cursor-pointer gap-2">
                                             <MessageSquare className = "h-4 w-4" />
                                             Ask AI about this document
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem onClick = {() => router.push(`/document/${doc.id}`)} className = "cursor-pointer gap-2">
+                                        <DropdownMenuItem onClick = {() => router.push(`/documents/${doc.id}`)} className = "cursor-pointer gap-2">
                                             <Info className = "h-4 w-4" />
                                             View document details
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className = "cursor-pointer gap-2">
+                                        <DropdownMenuItem onClick = {() => handleOpenShareModal(doc)} className = "cursor-pointer gap-2">
                                             <Share2 className = "h-4 w-4" />
                                             Share document
+
+                                            {isShareModalOpen && sharingDoc && (
+                                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs animate-in fade-in-50">
+                                                    <div className="bg-card border text-card-foreground rounded-xl w-full max-w-md p-6 shadow-lg relative animate-in zoom-in-95">
+                                                        <button 
+                                                            title = "Open Share Modal"
+                                                            onClick={() => setIsShareModalOpen(false)}
+                                                            className="absolute top-4 right-4 text-muted-foreground hover:text-foreground rounded-md p-1"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </button>
+
+                                                        <div className="flex items-center gap-2 mb-4">
+                                                            <Share2 className="h-5 w-5 text-primary" />
+                                                            <h3 className="text-lg font-bold tracking-tight">Chia sẻ tài liệu</h3>
+                                                        </div>
+
+                                                        <p className="text-sm text-muted-foreground mb-4 truncate">
+                                                            Tài liệu: <strong className="text-foreground font-medium">{sharingDoc.title}</strong>
+                                                        </p>
+
+                                                        <form onSubmit={handleConfirmShare} className="space-y-4">
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                                                                    <Mail className="h-3 w-3" /> Email người nhận
+                                                                </label>
+                                                                <input
+                                                                    type="email"
+                                                                    required
+                                                                    placeholder="example@domain.com"
+                                                                    value={shareEmail}
+                                                                    onChange={(e) => setShareEmail(e.target.value)}
+                                                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                                                />
+                                                            </div>
+
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                                                                    <Shield className="h-3 w-3" /> Access permission
+                                                                </label>
+                                                                <select
+                                                                    title="Permission Share"
+                                                                    value={sharePermission}
+                                                                    onChange={(e) => setSharePermission(e.target.value)}
+                                                                    className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                                                                >
+                                                                    <option value="read">Only read</option>
+                                                                    <option value="write">Write</option>
+                                                                </select>
+                                                            </div>
+
+                                                            <div className="flex items-center justify-end space-x-3 pt-2">
+                                                                <Button 
+                                                                    type="button" 
+                                                                    variant="outline" 
+                                                                    onClick={() => setIsShareModalOpen(false)}
+                                                                    disabled={isSubmittingShare}
+                                                                >
+                                                                    Cancel
+                                                                </Button>
+                                                                <Button type="submit" disabled={isSubmittingShare} className="gap-1">
+                                                                    {isSubmittingShare ? "Chỉ sẻ..." : "Xác nhận chia sẻ"}
+                                                                </Button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+            
+                                            )}
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>

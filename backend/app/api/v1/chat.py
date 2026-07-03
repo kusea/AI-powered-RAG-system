@@ -19,7 +19,7 @@ def search_vector(request: ChatQueryRequest, db: Session = Depends(get_db)):
     return rag_service.search_similar_embeddings(db, request.query, request.limit)
 
 @router.post("/query")
-async def query(request: ChatQueryStream, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def query(request: ChatQueryStream = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     print(f"REQUEST_QUERTY: {request.query}")
     session_title = ""
     session_id = request.session_id

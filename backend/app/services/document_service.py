@@ -1,5 +1,6 @@
 #Dỉrectly work with SQLAlchemy to store and query vector
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from app.models import Document, ChunkDocument, User, DocumentShare
 from app.schemas.document import ChunkEmbeddingCreate, DocumentShareCreate
 from app.core.notification_mannager import notification_manager
@@ -9,6 +10,7 @@ import os
 import uuid
 import asyncio
 import pandas as pd
+import io
 from datetime import datetime, timezone
 from shutil import copyfileobj
 from fastapi import UploadFile, HTTPException
@@ -40,6 +42,23 @@ def save_chunks_embeddings(db: Session, item: ChunkEmbeddingCreate, doc_id:int =
     db.commit()
     db.refresh(db_item)
     return db_item
+
+def process_csv_file(filepath: str):
+    encodings = ['utf-8', 'utf-8-sig', 'windows-1252', 'latin-1']
+
+    df = None
+    for encoding in encodings:
+        try:
+            df = pd.read_csv(filepath, encoding=encoding)
+            break
+        except (UnicodeDecodeError, TypeError):
+            continue
+
+    if df is None:
+        raise ValueError("Unable to decode CSV file with specified encodings.")
+    
+    return df
+        
 
 def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: int = 50):
     chunks = []
@@ -142,7 +161,7 @@ def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: 
                     })
         
         elif file_extension in ["csv", "xls", "xlsx"]:
-            df = pd.read_csv(filepath) if file_extension == "csv" else pd.read_excel(filepath)
+            df = process_csv_file(filepath) if file_extension == "csv" else pd.read_excel(filepath)
             for idx, row in df.iterrows():
                 row_dict = row.to_dict()
                 row_text = ", ".join([f"{col}: {val}" for col, val in row_dict.items() if pd.notna(val)])
@@ -183,7 +202,7 @@ def extract_full_text(filepath: str):
                     slide_text.append(shape.text) if hasattr(shape, "text") and shape.text.strip() else None
                 full_text += "\n".join(slide_text)
         elif file_extension in ["csv", "xls", "xlsx"]:
-            df = pd.read_csv(filepath) if file_extension == "csv" else pd.read_excel(filepath)
+            df =  process_csv_file(filepath) if file_extension == "csv" else pd.read_excel(filepath)
             
             row_list = []
             for idx, row in df.iterrows():
@@ -360,3 +379,11 @@ def get_shared_document(db: Session, user_id: int):
         Document.deleted_at == None
     ).all()
     
+def get_trash_document(db: Session, user_id: int):
+    return db.query(Document).join(DocumentShare, Document.id == DocumentShare.document_id).filter(
+        or_(
+            DocumentShare.shared_to_id == user_id, 
+            Document.user_id == user_id
+        ),
+        Document.deleted_at != None
+    ).all()

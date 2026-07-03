@@ -2,12 +2,12 @@ import React, { useState, useEffect} from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient} from "@tanstack/react-query";
 import { useRouter } from "next/router";
-import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon} from "lucide-react";
+import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon, Trash2} from "lucide-react";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "./ui/dropdownMenu";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
 
 import { getAuthToken } from "../services/authAPI";
-import API_URL from "@/services/APIclient";
 
 interface NotificationItem {
     id: number;
@@ -36,24 +36,66 @@ export default function NavBar() {
     };
 
     useEffect(() => {
-        const eventSource = new EventSource(`${API_URL}/notifications/stream`);
+        /* const tok = (typeof window !== "undefined") ? localStorage.getItem("token") : null;
+        if (!tok || tok === "undefined") {
+            console.warn("Token is not available. Have to delay the SSE connection...." + tok);
+            return;
+        } */
 
-        eventSource.onmessage = (event ) => {
-            const newNotification: NotificationItem = JSON.parse(event.data);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL;
+        const ctrl = new AbortController();
+        const connectSSE = async () => {
             try {
-                setNotifications((prevNotifications) => [newNotification, ...prevNotifications]);
-                console.log("New notification received: ", newNotification.text);
+                await fetchEventSource(`${API_URL}/notification/stream`, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                        "Accept": "text/event-stream"
+                    },
+                    signal: ctrl.signal,
+                    async onopen(response) {
+                        if (response.ok && response.headers.get("Content-Type") === "text/event-stream") {
+                            console.log("SSE connection opened");
+                            return;
+                        }
+                        if (response.status == 401) {
+                            console.warn("Token is expired or invalid. Please login again.");
+                            ctrl.abort(); // Abort the SSE connection
+                            localStorage.removeItem("token");
+                            router.push("/login");
+                            return;
+                        }
+                        if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+                            ctrl.abort();
+                            throw new Error("SSE connection failed with status " + response.status);
+                        }
+                    },
+                    onmessage(event) {
+                        if (event.data) {
+                            try {
+                                const newNotif: NotificationItem = JSON.parse(event.data);
+                                if (newNotif.text) setNotifications((prevNotifications) => [...prevNotifications, newNotif]);
+                            } catch (error) {
+                                console.error("Error parsing SSE message:", error);
+                            }
+                        }
+                    },
+                    onerror(error) {
+                        console.error("SSE connection error: ", error);
+                        return;
+                    },
+                    onclose() {
+                        console.log("SSE connection closed");
+                    }
+                });
             } catch (error) {
-                console.error("Error parsing notification data: ", error);
+                console.error("Error connecting to SSE:", error);
             }
         };
 
-        eventSource.onerror = (error) => {
-            console.error("EventSource failed to connect to SSE, trying to reconnect...", error);
-        };
-
-        return () => eventSource.close();
-    }, []);
+        connectSSE();
+        return () => ctrl.abort();
+    }, [router, token]);
 
     return (
         <nav className="bg-blue-400 text-white backdrop-blur sticky top-0 z-50 border-b">
@@ -88,9 +130,9 @@ export default function NavBar() {
                         </button>
                         
                         <button
-                            onClick={() => router.push("/chat")}
+                            onClick={() => router.push("/share-to-me")}
                             className={`flex items-center gap-2 px-5 h-full text-sm font-medium transition-colors
-                                ${router.pathname === "/chat"
+                                ${router.pathname === "/share-to-me"
                                     ? "bg-blue-800 text-white"
                                     : "text-blue-100 hover:bg-blue-700 hover:text-white"
                                 }`}>
@@ -108,6 +150,13 @@ export default function NavBar() {
                         </div>
                     ): (
                         <div className = "flex items-center space-x-4">
+                            <button
+                                title = "Recycle Bin"
+                                className = {`text-sm font-medium flex items-center gap-1 ${router.pathname === '/documents/trash' ? 'text-primary': 'text-muted-foreground'}`}
+                                onClick = {() => router.push('/documents/trash')}>
+                                    <Trash2 className="h-5 w-5" />
+                                </button>
+
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="icon" className="relative">

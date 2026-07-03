@@ -4,7 +4,7 @@ from jose import jwt, JWTError
 from app.core.config import settings
 from passlib.context import CryptContext
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -30,12 +30,20 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 # Dependency to get user from token in header
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
-def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+def get_current_user(db: Session = Depends(get_db), token_header: str = Depends(oauth2_scheme), request: Request = None):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    token = token_header
+    if not token:
+        token = request.query_params.get("token")
+
+    if not token or token == "undefined":
+        print("Token not found")
+        raise credentials_exception
 
     try:
         jwt_decode = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

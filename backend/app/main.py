@@ -5,9 +5,8 @@ from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.models import Document, User, UserAccount
-from app.schemas import document
 from app.core.database import Base, engine
-from backend.app.init import auto_purge_expire_chat
+from app import init
 
 from app.middlewares.rate_limiter import RateLimitMiddleware
 
@@ -24,7 +23,7 @@ async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind = engine) # Create tables based on models
         scheduler = BackgroundScheduler()
-        scheduler.add_job(auto_purge_expire_chat, "cron", hour = 0, minute = 0, second = 0)
+        scheduler.add_job(init.auto_purge_expire_trash, "cron", hour = 0, minute = 0, second = 0)
         scheduler.start()
         print("Database initialized successfully.")
         

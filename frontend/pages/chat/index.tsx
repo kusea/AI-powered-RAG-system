@@ -291,7 +291,7 @@ export default function ChatAssistant(){
                                 document_ids ? (
                                     <span className="text-primary font-medium">
                                         <FileText className="h-3 w-3" />
-                                        Question and answer based on these documents: {`ID ${document_ids}`}
+                                        Question and answer based on {document_ids.length === 1? "this document": "these documents"}
                                     </span>
                                 ): document_id ? (
                                     <span className="text-amber-500 font-medium flex items-center gap-1 mt-0.5">
