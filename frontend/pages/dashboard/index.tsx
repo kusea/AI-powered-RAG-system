@@ -408,7 +408,8 @@ export default function Dashboard(){
                                 className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                             >
                                 <option value="read">Only read</option>
-                                <option value="write">Write</option>
+                                <option value="write">Only Write</option>
+                                <option value="read and write">Read and Write</option>
                             </select>
                         </div>
 

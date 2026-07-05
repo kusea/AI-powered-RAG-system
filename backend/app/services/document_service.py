@@ -1,7 +1,7 @@
 #Dỉrectly work with SQLAlchemy to store and query vector
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from app.models import Document, ChunkDocument, User, DocumentShare
+from app.models import Document, ChunkDocument, User, DocumentShare, Notification
 from app.schemas.document import ChunkEmbeddingCreate, DocumentShareCreate
 from app.core.notification_mannager import notification_manager
 from sentence_transformers import SentenceTransformer
@@ -334,42 +334,49 @@ async def shared_document_to_user(shared_data: DocumentShareCreate, db: Session,
         db.refresh(new_share)
         share = new_share
 
-    def toStringTimeDelta(time_share: datetime):
-        delta = datetime.now(timezone.utc) - time_share
-        days = delta.days
-        hours = delta.seconds // 3600
-        minutes = (delta.seconds % 3600) // 60
-        seconds = delta.seconds % 60
-        if days > 0:
-            return f"{days} day(s) ago"
-        elif hours > 0:
-            return f"{hours} hour(s) ago"
-        elif minutes > 0:
-            return f"{minutes} minute(s) ago"
-        elif seconds > 0:
-            return f"{seconds} second(s) ago"
-        else:
-            return "Just now"
+    await trigger_new_notification(db, sender, receiver, doc.title)
+    
+    return share
+
+async def trigger_new_notification(db: Session, sender: User, receiver: User, doc_title: str):
+    notif_receive = Notification(
+        user_id = receiver.id,
+        text = f"{sender.email} shared a document '{doc_title}' with you.",
+        type = "received"
+    )
+
+    notif_sent = Notification(
+        user_id = sender.id,
+        text = f"You shared a document '{doc_title}' with {receiver.email}.",
+        type = "sent"
+    )
+
+    db.add(notif_receive)
+    db.add(notif_sent)
+    db.commit()
+    db.refresh(notif_receive)
+    db.refresh(notif_sent)
 
     # Emit a signal to send a notification in the background
     await notification_manager.send_notification(
             receiver.id,{
-                "id": share.id,
-                "text": f"{sender.email} shared a document '{doc.title}' with you.",
-                "type": "received",
-                "delta_time": toStringTimeDelta(share.created_at),
+                "id": notif_receive.id,
+                "text": notif_receive.text,
+                "type": notif_receive.type,
+                "created_at": notif_receive.created_at.isoformat()
             }
         )
     
     await notification_manager.send_notification(
-            user_id,{
-                "id": share.id,
-                "text": f"You shared a document '{doc.title}' with {receiver.email}.",
-                "type": "sent",
-                "delta_time": toStringTimeDelta(share.created_at)
+            sender.id,{
+                "id": notif_receive.id,
+                "text": notif_receive.text,
+                "type": notif_receive.type,
+                "created_at": notif_receive.created_at.isoformat()
             }
         )
-    return share
+
+
 
 def get_shared_document(db: Session, user_id: int, filter_condition):
     document_share = db.query(Document, DocumentShare).join(DocumentShare, Document.id == DocumentShare.document_id).filter(

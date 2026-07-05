@@ -79,6 +79,35 @@ def shared_to_me(db: Session = Depends(get_db), current_user: User = Depends(get
 def get_trash_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return document_service.get_trash_document(db, current_user.id)
 
+@router.get("/all", status_code = status.HTTP_200_OK)
+def get_all_documents(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    own_docs = db.query(Document).filter(Document.user_id == current_user.id, Document.deleted_at == None).all()
+    shared_docs = db.query(DocumentShare).filter(DocumentShare.shared_to_id == current_user.id).all()
+
+    result = []
+    for doc in own_docs:
+        result.append({
+            "id": doc.id,
+            "title": doc.title,
+            "file_size": doc.file_size,
+            "created_at": doc.created_at.isoformat(),
+            "is_shared": False,
+        })
+
+    for share in shared_docs:
+        if share.document and share.document.deleted_at == None:
+            result.append({
+                "id": share.document.id,
+                "title": share.document.title,
+                "file_size": share.document.file_size,
+                "created_at": share.document.created_at.isoformat(),
+                "is_shared": True,
+                "owner_email": share.document.user.email
+            })
+
+    result = sorted(result, key=lambda x: x["created_at"], reverse=True)
+    return result
+
 
 @router.get("/{document_id}", response_model = DocumentResponse)
 def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):

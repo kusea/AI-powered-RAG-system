@@ -2,7 +2,7 @@ import React, { useState, useEffect} from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient} from "@tanstack/react-query";
 import { useRouter } from "next/router";
-import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon, Trash2, X} from "lucide-react";
+import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon, Trash2, X, FolderOpen} from "lucide-react";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "./ui/dropdownMenu";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
@@ -12,8 +12,8 @@ import { getAuthToken } from "../services/authAPI";
 interface NotificationItem {
     id: number;
     text: string;
-    type: "receiver" | "sender";
-    delta_time: string;
+    type: "received" | "sent";
+    created_at: string;
     seen: boolean;
 }
 
@@ -21,6 +21,7 @@ export default function NavBar() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [now, setNow] = useState(() => Date.now());
 
     const {data: token} = useQuery({
         queryKey: ["authToken"],
@@ -35,6 +36,23 @@ export default function NavBar() {
         queryClient.invalidateQueries({queryKey: ["authToken"]});
         router.push("/dashboard");
     };
+
+    const getDeltaTimeLabel = (time: string) => {
+        const past = new Date(time).getTime();
+
+        const diffInSeconds = Math.floor((now - past) / 1000);
+        if (diffInSeconds < 60) return "Just now";
+        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+        return new Date(time).toLocaleDateString('vi-VN');
+    }
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setNow(Date.now());
+        }, 30000);
+        return () => clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         /* const tok = (typeof window !== "undefined") ? localStorage.getItem("token") : null;
@@ -91,7 +109,7 @@ export default function NavBar() {
                                         id: newNotif.id || Date.now(),
                                         text: newNotif.text,
                                         type: newNotif.type,
-                                        delta_time: newNotif.delta_time,
+                                        created_at: newNotif.created_at,
                                         seen: false
                                     }
                                     setNotifications((prevNotifications) => [mappedNotif, ...prevNotifications]);
@@ -146,6 +164,17 @@ export default function NavBar() {
                                     : "text-blue-100 hover:bg-blue-700 hover:text-white"
                                 }`}>
                             Dashboard
+                        </button>
+
+                        <button
+                            onClick={() => router.push("/documents/all")}
+                            className={`flex items-center gap-2 px-5 h-full text-sm font-medium transition-colors
+                                ${router.pathname === "/documents/all"
+                                    ? "bg-blue-800 text-white"
+                                    : "text-blue-100 hover:bg-blue-700 hover:text-white"
+                                }`}>
+                            <FolderOpen className="h-4 w-4" />
+                            All Documents
                         </button>
 
                         <button
@@ -221,7 +250,7 @@ export default function NavBar() {
                                                         ${notif.seen ? 'bg-background opacity-60 text-muted-foreground' : 'bg-blue-50/50 dark:bg-blue-950/20 font-medium text-foreground'}`}>
                                                             <div className = "flex flex-col items-start gap-0.5 flex-1 min-w-0">
                                                                 <div className = "text-sm text-foreground">{notif.text}</div>
-                                                                <span className = "text-xs text-muted-foreground">{notif.delta_time}</span>
+                                                                <span className = "text-xs text-muted-foreground">{getDeltaTimeLabel(notif.created_at)}</span>
                                                             </div>
 
                                                             <button

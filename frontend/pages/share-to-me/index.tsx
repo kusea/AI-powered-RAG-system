@@ -16,7 +16,7 @@ interface SharedDocument {
 
 export default function SharedToMe() {
     const router = useRouter();
-    const [sortField, setSortField] = useState<"title" | "user" | "shared_at">("shared_at");
+    const [sortField, setSortField] = useState<"title" | "user" | "shared_at" | "permission">("shared_at");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [activeTab, setActiveTab] = useState<"to_me" | "by_me">("to_me");
 
@@ -28,7 +28,7 @@ export default function SharedToMe() {
             return res.data;
         }
     });
-    const handleSort = (field: "title" | "user" | "shared_at") => {
+    const handleSort = (field: "title" | "user" | "shared_at" | "permission") => {
         setSortField(field);
         setSortOrder(sortField === field && sortOrder === "asc" ? "desc" : "asc");
     };
@@ -46,6 +46,9 @@ export default function SharedToMe() {
         } else if (sortField === "shared_at") {
             valA = new Date(a.shared_at).getTime().toString();
             valB = new Date(b.shared_at).getTime().toString();
+        } else {
+            valA = a.permission.toLowerCase();
+            valB = b.permission.toLowerCase();
         }
 
         if (valA < valB) return sortOrder === "asc" ? -1 : 1;
@@ -154,7 +157,12 @@ export default function SharedToMe() {
                                 </td>
                                 <td className="p-4">
                                     <div className="flex items-center gap-1.5">
-                                        {doc.permission === "read" ? <Eye className="w-3.5 h-3.5 text-muted-foreground" /> : <PenIcon className="w-3.5 h-3.5 text-muted-foreground" />}
+                                        {doc.permission === "read" ? <Eye className="w-3.5 h-3.5 text-muted-foreground" /> 
+                                        : doc.permission === "write" ? <PenIcon className="w-3.5 h-3.5 text-muted-foreground"/>
+                                        : <div className="flex items-center gap-1.5">
+                                            <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                                            <PenIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                                        </div>}
                                     </div>
                                 </td>
                                 <td className="p-4 text-right">
