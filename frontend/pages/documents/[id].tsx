@@ -2,7 +2,7 @@
 import { useRouter } from "next/router";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { FileText, ArrowLeft, MessageSquare, Calendar, HardDrive } from "lucide-react";
+import { FileText, ArrowLeft, MessageSquare, Calendar, HardDrive, Share2 } from "lucide-react";
 import Link from "next/link";
 import api from "@/services/APIclient";
 
@@ -41,12 +41,20 @@ export default function DocumentDetail() {
                         <ArrowLeft className="h-4 w-4" /> Back
                     </Button>
                 </Link>
-                
-                <Link href={`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`}>
-                    <Button className="gap-2 text-amber-500 border-amber-500/30 hover:bg-amber-500/10" variant="outline">
-                        <MessageSquare className="h-4 w-4" /> Ask AI Assistant
-                    </Button>
-                </Link>
+
+                <div className = "flex-1 flex justify-end space-x-2">
+                    <Link href="/documents/share">
+                        <Button className="text-primary border-primary/30 hover:bg-primary/10 gap-2" variant = "outline">
+                            <Share2 className="h-4 w-4" /> Share
+                        </Button>
+                    </Link>
+                    
+                    <Link href={`/chat?document_id=${doc.id}&title=${encodeURIComponent(doc.title)}`}>
+                        <Button className="gap-2 text-amber-500 border-amber-500/30 hover:bg-amber-500/10" variant="outline">
+                            <MessageSquare className="h-4 w-4" /> Ask AI Assistant
+                        </Button>
+                    </Link>
+                </div>
             </div>
 
             {/* 1. THÔNG TIN CHUNG CỦA TÀI LIỆU */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect} from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient} from "@tanstack/react-query";
 import { useRouter } from "next/router";
-import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon, Trash2} from "lucide-react";
+import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon, Trash2, X} from "lucide-react";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "./ui/dropdownMenu";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
@@ -14,6 +14,7 @@ interface NotificationItem {
     text: string;
     type: "receiver" | "sender";
     delta_time: string;
+    seen: boolean;
 }
 
 export default function NavBar() {
@@ -26,7 +27,7 @@ export default function NavBar() {
         queryFn: getAuthToken,
         staleTime: 0
     });
-
+    const unseenCount = notifications.filter(notification => !notification.seen).length;
     const isLoggedIn = !!token;
 
     const handleLogout = () => {
@@ -41,6 +42,11 @@ export default function NavBar() {
             console.warn("Token is not available. Have to delay the SSE connection...." + tok);
             return;
         } */
+
+        if (router.pathname === "/login" || router.pathname === "/signup") {
+            console.log("Not connecting to SSE on login or signup page.");
+            return;
+        }
 
         const API_URL = process.env.NEXT_PUBLIC_API_URL;
         const ctrl = new AbortController();
@@ -62,8 +68,9 @@ export default function NavBar() {
                             console.warn("Token is expired or invalid. Please login again.");
                             ctrl.abort(); // Abort the SSE connection
                             localStorage.removeItem("token");
+                            
                             router.push("/login");
-                            return;
+                            throw new Error("Token is expired or invalid. Please login again.");
                         }
                         if (response.status >= 400 && response.status < 500 && response.status !== 429) {
                             ctrl.abort();
@@ -72,11 +79,25 @@ export default function NavBar() {
                     },
                     onmessage(event) {
                         if (event.data) {
+                            let data = event.data;
+                            if (data.startsWith("data:")) {
+                                data = data.replace("data:", "");
+                            }
                             try {
-                                const newNotif: NotificationItem = JSON.parse(event.data);
-                                if (newNotif.text) setNotifications((prevNotifications) => [...prevNotifications, newNotif]);
+                                const newNotif = JSON.parse(data.trim());
+                                console.log(`New notification: ${newNotif.text}`)
+                                if (newNotif.text) {
+                                    const mappedNotif: NotificationItem = {
+                                        id: newNotif.id || Date.now(),
+                                        text: newNotif.text,
+                                        type: newNotif.type,
+                                        delta_time: newNotif.delta_time,
+                                        seen: false
+                                    }
+                                    setNotifications((prevNotifications) => [mappedNotif, ...prevNotifications]);
+                                }
                             } catch (error) {
-                                console.error("Error parsing SSE message:", error);
+                                console.error(`Error parsing SSE data: ${error} with data: ${data}`);
                             }
                         }
                     },
@@ -96,6 +117,15 @@ export default function NavBar() {
         connectSSE();
         return () => ctrl.abort();
     }, [router, token]);
+
+    const handleMarkAsSeen = (id: number) => {
+        setNotifications((prevNotifications) => prevNotifications.map((notification) => notification.id === id ? {...notification, seen: true} : notification));
+    };
+
+    const handleDeleteNotifications = (e: React.MouseEvent, id: number) => {
+        e.stopPropagation();  // Prevent click event affecting the handleMarkAsSeen function
+        setNotifications((prevNotifications) => prevNotifications.filter(notification => notification.id !== id));
+    }
 
     return (
         <nav className="bg-blue-400 text-white backdrop-blur sticky top-0 z-50 border-b">
@@ -137,7 +167,7 @@ export default function NavBar() {
                                     : "text-blue-100 hover:bg-blue-700 hover:text-white"
                                 }`}>
                             <Share2 className="h-4 w-4" />
-                            Shared to me
+                            Sharing Center
                         </button>
                     </nav>
                 </div>
@@ -162,14 +192,21 @@ export default function NavBar() {
                                     <Button variant="ghost" size="icon" className="relative">
                                         <Bell className="h-5 w-5"/>
                                         {/* Show a red dot if there are notifications */}
-                                        {notifications.length > 0 && (
+                                        {unseenCount > 0 && (
                                             <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive" />
                                         )}
                                     </Button>
                                 </DropdownMenuTrigger>
 
-                                <DropdownMenuContent className="w-80" align="end">
-                                    <DropdownMenuLabel>Share notifications</DropdownMenuLabel>
+                                <DropdownMenuContent className="w-84 max-w-sm" align="end">
+                                    <DropdownMenuLabel className="flex justify-between items-center">
+                                        <span>Share notifications</span>
+                                        {unseenCount > 0 && (
+                                            <span className="bg-destructive text-white text-10px px-1.5 py-0.5 rounded-full font-bold">
+                                                {unseenCount} new
+                                            </span>
+                                        )}
+                                    </DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     {notifications.length === 0 ? (
                                         <DropdownMenuItem className="text-muted-foreground cursor-default">
@@ -177,9 +214,24 @@ export default function NavBar() {
                                         </DropdownMenuItem>): (
                                             <div className = "max-h-72 overflow-y-auto">
                                                 {notifications.map((notif) =>(
-                                                    <DropdownMenuItem key = {notif.id} className = "flex flex-col items-start p-3 gap-1 cursor-pointer">
-                                                        <div className = "text-sm text-foreground">{notif.text}</div>
-                                                        <span className = "text-xs text-muted-foreground">{notif.delta_time}</span>
+                                                    <DropdownMenuItem 
+                                                        key = {notif.id} 
+                                                        onClick = {() => handleMarkAsSeen(notif.id)}
+                                                        className = {`flex items-center justify-between p-3 gap-2 border-b last-border-0 cursor-ponter transition-all duration-200
+                                                        ${notif.seen ? 'bg-background opacity-60 text-muted-foreground' : 'bg-blue-50/50 dark:bg-blue-950/20 font-medium text-foreground'}`}>
+                                                            <div className = "flex flex-col items-start gap-0.5 flex-1 min-w-0">
+                                                                <div className = "text-sm text-foreground">{notif.text}</div>
+                                                                <span className = "text-xs text-muted-foreground">{notif.delta_time}</span>
+                                                            </div>
+
+                                                            <button
+                                                                title="Delete Notification"
+                                                                onClick = {(e) => handleDeleteNotifications(e, notif.id)}
+                                                                className="text-muted-foreground hover:text-destructive p-1 rounded-md hover:bg-muted transition-colors shrink-0"
+                                                            >
+                                                                <X className="h-3.5 w-3.5" />
+                                                            </button>
+
                                                     </DropdownMenuItem>
                                                 ))}
                                             </div>

@@ -290,7 +290,7 @@ def restore_document(db: Session, document_ids: list[int], user_id: int):
     db.commit()
     return {"message": "Restore document successfully!!!"}
 
-def shared_document_to_user(shared_data: DocumentShareCreate, db: Session, user_id: int):
+async def shared_document_to_user(shared_data: DocumentShareCreate, db: Session, user_id: int):
     sender = db.query(User).filter(User.id == user_id).first()
     if not sender:
         raise HTTPException(status_code=404, detail="Sender not found.")
@@ -317,6 +317,7 @@ def shared_document_to_user(shared_data: DocumentShareCreate, db: Session, user_
 
     if existing_share:
         existing_share.permission = shared_data.permission
+        existing_share.created_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(existing_share)
         share = existing_share
@@ -351,18 +352,16 @@ def shared_document_to_user(shared_data: DocumentShareCreate, db: Session, user_
             return "Just now"
 
     # Emit a signal to send a notification in the background
-    asyncio.run_coroutine_threadsafe(
-        notification_manager.send_notification(
+    await notification_manager.send_notification(
             receiver.id,{
                 "id": share.id,
                 "text": f"{sender.email} shared a document '{doc.title}' with you.",
                 "type": "received",
                 "delta_time": toStringTimeDelta(share.created_at),
             }
-        ))
+        )
     
-    asyncio.run_coroutine_threadsafe(
-        notification_manager.send_notification(
+    await notification_manager.send_notification(
             user_id,{
                 "id": share.id,
                 "text": f"You shared a document '{doc.title}' with {receiver.email}.",
@@ -370,14 +369,33 @@ def shared_document_to_user(shared_data: DocumentShareCreate, db: Session, user_
                 "delta_time": toStringTimeDelta(share.created_at)
             }
         )
-    )
     return share
 
-def get_shared_document(db: Session, user_id: int):
-    return db.query(Document).join(DocumentShare, Document.id == DocumentShare.document_id).filter(
-        DocumentShare.shared_to_id == user_id,
+def get_shared_document(db: Session, user_id: int, filter_condition):
+    document_share = db.query(Document, DocumentShare).join(DocumentShare, Document.id == DocumentShare.document_id).filter(
+        filter_condition,
         Document.deleted_at == None
     ).all()
+    raw_dict = [{
+        "id": doc.id,
+        "title": doc.title,
+        "shared_by": share.shared_by_id,
+        "share_to": share.shared_to_id,
+        "permission": share.permission,
+        "shared_at": share.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    } for doc, share in document_share]
+
+    list_email_share_by = [db.query(User).filter(User.id == dict["shared_by"]).first().email for dict in raw_dict]
+    list_email_share_to = [db.query(User).filter(User.id == dict["share_to"]).first().email for dict in raw_dict]
+
+    return [{
+        "id": dict["id"],
+        "title": dict["title"],
+        "shared_by": email_share_by,
+        "share_to": email_share_to,
+        "permission": dict["permission"],
+        "shared_at": dict["shared_at"]
+    } for dict, email_share_by, email_share_to in zip(raw_dict, list_email_share_by, list_email_share_to)]
     
 def get_trash_document(db: Session, user_id: int):
     share_doc_table = db.query(Document).join(DocumentShare)

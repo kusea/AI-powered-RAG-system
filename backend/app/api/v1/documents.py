@@ -10,7 +10,7 @@ from app.services import document_service;
 from typing import List
 
 from app.core.security import get_current_user
-from app.models import User, Document
+from app.models import User, Document, DocumentShare
 
 
 router = APIRouter()
@@ -56,12 +56,24 @@ def restore_document(payload: RestoreDocPayload = Body(...), current_user: User 
     return document_service.restore_document(db, payload.document_ids, current_user.id)
 
 @router.post("/share", response_model = DocumentShareResponse)
-def share_document(document: DocumentShareCreate = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return document_service.shared_document_to_user(document, db, current_user.id)
+async def share_document(document: DocumentShareCreate = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return await document_service.shared_document_to_user(document, db, current_user.id)
 
-@router.get("/shared-to-me", response_model = List[DocumentShareResponse])
+class DocumentSharePayload(BaseModel):
+    id: int
+    title: str
+    shared_by: str
+    share_to: str
+    permission: str
+    shared_at: str
+
+@router.get("/shared-by-me", response_model = List[DocumentSharePayload])
+def shared_by_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return document_service.get_shared_document(db, current_user.id, DocumentShare.shared_by_id == current_user.id)
+
+@router.get("/shared-to-me", response_model = List[DocumentSharePayload])
 def shared_to_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return document_service.get_shared_document(db, current_user.id)
+    return document_service.get_shared_document(db, current_user.id, DocumentShare.shared_to_id == current_user.id)
 
 @router.get("/trash", status_code = status.HTTP_200_OK)
 def get_trash_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

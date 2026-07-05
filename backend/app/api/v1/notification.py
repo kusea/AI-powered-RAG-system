@@ -15,10 +15,9 @@ async def stream_notifications(db: Session = Depends(get_db), current_user: User
     async def event_generator():
         queue = await notification_manager.connect(current_user.id)
         try: 
-            yield f"data: {json.dumps({'status': 'authenticated', 'user_id': current_user.id})}\n\n"
             while True: 
                 notfication = await queue.get() # wait for a new notification available in the queue
-                yield f"data: {notfication}\n\n" # send the notification to
+                yield f"data: {json.dumps(notfication)}\n\n" # send the notification to
         except asyncio.CancelledError:
             await notification_manager.disconnect(current_user.id, queue)
 
