@@ -2,6 +2,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime
+import json
 
 class ChunkEmbeddingBase(BaseModel):
     title: Optional[str] = None
@@ -21,6 +22,11 @@ class ChunkEmbeddingResponse(ChunkEmbeddingBase):
     class Config:
         from_attributes = True
 
+class DocumentInsight(BaseModel):
+    summary: str
+    key_points: List[str]
+    keywords: List[str]
+
 class DocumentResponse(BaseModel):
     id: int
     title: str 
@@ -30,6 +36,7 @@ class DocumentResponse(BaseModel):
     user_id: int
     created_at: datetime
     embedding: Optional[List[float]] = None
+    insights: Optional[DocumentInsight] = None
 
     class Config: 
         from_attributes = True

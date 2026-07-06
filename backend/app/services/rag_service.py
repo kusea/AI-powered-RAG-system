@@ -16,7 +16,7 @@ openai_client = AsyncOpenAI(
     base_url=settings.AI_BASE_URL,
     api_key=settings.OPENAI_API_KEY
 ) #Need to add AI api key later in .env
-SEARCH_LIMIT = 3
+SEARCH_LIMIT = 20
 def search_similar_embeddings(db: Session, query_text: str, limit: int, document_ids: Optional[List[int]] = None) -> List[Document]:
     query_vector = embedding_model.encode(query_text).tolist()
     if len(query_vector) != settings.VECTOR_DIMENSION:
@@ -111,3 +111,42 @@ async def generate_chat_stream(db: Session, query_text: str, document_ids: Optio
         yield f"data: {json.dumps(error_data)}\n\n"
 
 
+async def generate_document_summary(document_content: str):
+    # Use LLM to quickly summarize and extract data from document
+    if not document_content or len(document_content.strip()) == 0:
+        return {
+            "summary": "Empty document, can not generate summary.",
+            "key_points": [],
+            "key_words": []
+        }
+    
+    truncated_content = document_content[:8000] if len(document_content) > 8000 else document_content
+    promp = (
+        "YOU ARE AN AI ASSISTANT INTEGRATED INTO AN INTERNAL DOCUMENT MANAGEMENT SYSTEM (RAG SYSTEM)."
+        "YOU HAVE FULL PERMISSION TO ACCESS AND READ THE USER'S EXTRACTED FILE DATA PROVIDED BELOW."
+        "Your tasks: Read the document(s) and return a standard JSON object with summary, key_points and key_words satisfying the following requirements:"
+        "1. 'summary': A overview (at most 200 words, about 3-5 sentences) of the document(s)."
+        "2. 'key_points': A list of 5 key points extracted from the document(s)."
+        "3. 'keywords': A list of 5 keywords from the document(s)."
+        f"Content: \n{truncated_content}"
+    )
+
+    try:
+        response = await openai_client.chat.completions.create(
+            model = "llama-3.3-70b-versatile",
+            messages = [
+                {"role": "system", "content": promp},
+            ],
+            stream = True, # Set words appear one by one
+            response_format={"type": "json_object"}
+        )
+        
+        result_content = response.choices[0].delta.content
+        return json.loads(result_content)
+    except Exception as e:
+        print(f"Error during generate document summary: {str(e)}")
+        return {
+            "summary": "Error during generate document summary.",
+            "key_points": [str(e)],
+            "key_words": []
+        }

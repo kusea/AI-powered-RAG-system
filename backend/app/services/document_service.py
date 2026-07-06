@@ -8,13 +8,13 @@ from sentence_transformers import SentenceTransformer
 
 import os 
 import uuid
-import asyncio
 import pandas as pd
-import io
+import pytesseract
+import pdfplumber
+from PIL import Image
 from datetime import datetime, timezone
 from shutil import copyfileobj
 from fastapi import UploadFile, HTTPException
-from app.core.config import settings
 from pypdf import PdfReader
 from docx import Document as DocxReader 
 from pptx import Presentation
@@ -58,29 +58,54 @@ def process_csv_file(filepath: str):
         raise ValueError("Unable to decode CSV file with specified encodings.")
     
     return df
-        
 
+def extract_text_from_image(filepath: str) -> str:
+    try:
+        image = Image.open(filepath)
+        text = pytesseract.image_to_string(image, lang = "vie+eng")
+        return text.strip()
+    except Exception as e:
+        raise HTTPException(status_code = 500, detail = f"Fail to read image file: {str(e)}")
+        
 def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: int = 50):
     chunks = []
     file_extension = filepath.split(".")[-1].lower()
     try:
         if file_extension == "pdf":
-            reader = PdfReader(filepath)
-            for page_nums, page in enumerate(reader.pages, start=1):
-                text = page.extract_text()
-                if not text:
-                    continue
+            with pdfplumber.open(filepath) as reader:
+                for page_nums, page in enumerate(reader.pages, start=1):
+                    text = page.extract_text() or ""
 
-                start = 0 
-                while start < len(text):
-                    end = min(start + chunk_size, len(text))
-                    chunk_text = text[start:end].strip()
-                    chunks.append({
-                        "text": chunk_text,
-                        "page": page_nums
-                    })
+                    tables = page.extract_tables()
+                    table_texts = []
 
-                    start += (chunk_size - chunk_overlap)
+                    for table in tables:
+                        if not table:
+                            continue
+
+                        df_table = pd.DataFrame(table)
+                        df_table = df_table.fillna("")
+
+                        md_table = df_table.to_markdown(index=False, tablefmt = "github")
+                        table_texts.append(f"Data table: \n{md_table}\n")
+
+                    full_page_content = text
+                    if table_texts:
+                        full_page_content += "".join(table_texts)
+
+                    if not full_page_content.strip():
+                        continue
+                    
+                    start = 0 
+                    while start < len(text):
+                        end = min(start + chunk_size, len(text))
+                        chunk_text = text[start:end].strip()
+                        chunks.append({
+                            "text": chunk_text,
+                            "page": page_nums
+                        })
+
+                        start += (chunk_size - chunk_overlap)
 
         elif file_extension == "md":
             with open(filepath, "r", encoding="utf-8") as f:
@@ -119,7 +144,23 @@ def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: 
                     "text": full_chunk_text,
                     "source_location": f"{filepath}:chunk:{idx}"
                 })
-
+        elif file_extension in ["png", "jpg", "jpeg"]:
+            full_image_text = extract_text_from_image(filepath)
+            
+            start = 0
+            idx = 1
+            while start < len(full_image_text):
+                end = min(start + chunk_size, len(full_image_text))
+                chunk_text = full_image_text[start:end].strip()
+                
+                if chunk_text:
+                    chunks.append({
+                        "text": chunk_text,
+                        "source_location": f"{filepath}:chunk:{idx}"
+                    })
+                    idx += 1
+                
+                start += (chunk_size - chunk_overlap)
         elif file_extension in ["txt", "html"]:
             with open(filepath, "r", encoding="utf-8") as f:
                 text = f.read()
@@ -162,14 +203,22 @@ def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: 
         
         elif file_extension in ["csv", "xls", "xlsx"]:
             df = process_csv_file(filepath) if file_extension == "csv" else pd.read_excel(filepath)
+
+            chunk_text = []
+            rows_per_chunk_text = 25
             for idx, row in df.iterrows():
                 row_dict = row.to_dict()
                 row_text = ", ".join([f"{col}: {val}" for col, val in row_dict.items() if pd.notna(val)])
                 if row_text:
-                    chunks.append({
-                        "text": row_text,
-                        "row": idx + 1
-                    })
+                    chunk_text.append(f"[Row {idx + 1}] {row_text}")
+
+                if (idx + 1) % rows_per_chunk_text == 0 or idx + 1 == len(df):
+                    if chunk_text:
+                        chunks.append({
+                            "text": "\n".join(chunk_text),
+                            "row_range": f"{idx + 1 - len(chunk_text)} - {idx + 1}"
+                        })
+                        chunk_text = []
     except Exception as e:
         raise HTTPException(status_code = 500, detail = f"Fail to read PDF file: {str(e)}")
     
@@ -181,13 +230,21 @@ def extract_full_text(filepath: str):
     full_text = ""
     try:
         if file_extension == "pdf": 
-            reader = PdfReader(filepath)
-            text_list = []
-            for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    text_list.append(text)
-            full_text = "\n".join(text_list)
+            with pdfplumber.open(filepath) as reader:
+                text_list = []
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        text_list.append(text)
+
+                    table_list = page.extract_tables()
+                    if table_list:
+                        for table in table_list:
+                            df_table = pd.DataFrame(table)
+                            text_list.append(f"Data table: \n{df_table.to_markdown(index=False)}\n")
+                full_text = "\n".join(text_list)
+        elif file_extension in ["png", "jpg", "jpeg"]:
+            full_text = extract_text_from_image(filepath)
         elif file_extension ==  "docx":
             doc = DocxReader(filepath)
             full_text = "\n".join([paragraph.text for paragraph in doc.paragraphs])

@@ -6,7 +6,7 @@ from app.schemas.document import ChunkEmbeddingResponse, DocumentResponse, Docum
 from pydantic import BaseModel
 
 import os;
-from app.services import document_service;
+from app.services import document_service, rag_service
 from typing import List
 
 from app.core.security import get_current_user
@@ -21,12 +21,12 @@ def create_document_embedding(item: ChunkEmbeddingResponse, db: Session = Depend
 
 @router.post("/upload", response_model = DocumentResponse)
 def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    allowed_extensions = [".pdf", ".docx", ".txt", ".pptx", ".xlsx", ".csv", ".html", ".xls", ".md"]
+    allowed_extensions = [".pdf", ".docx", ".txt", ".pptx", ".xlsx", ".csv", ".html", ".xls", ".md", ".png", ".jpg", ".jpeg"]
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in allowed_extensions:
         raise HTTPException(
             status_code = status.HTTP_400_BAD_REQUEST, 
-            detail = "Invalid file type. Only PDF, DOCX, TXT, PPTX, XLSX, CSV, HTML, XLS, MD, XLS files are allowed.")
+            detail = "Invalid file type. Only PDF, DOCX, TXT, PPTX, XLSX, CSV, HTML, XLS, MD, XLSX, JPG, JPEG, PNG files are allowed.")
     
     try:
         return document_service.save_loaded_file(db, file, current_user.id, background_tasks)
@@ -110,5 +110,20 @@ def get_all_documents(db: Session = Depends(get_db), current_user: User = Depend
 
 
 @router.get("/{document_id}", response_model = DocumentResponse)
-def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):
-    return db.query(Document).filter(Document.id == document_id and Document.user_id == current_user.id).first()
+async def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):
+    doc = db.query(Document).filter(Document.id == document_id and Document.user_id == current_user.id and Document.deleted_at == None).first()
+    if not doc:
+        raise HTTPException(status_code = status.HTTP_404_NOT_FOUND, detail = "Document not found in your account's storage.")
+    
+    insights = await rag_service.generate_document_summary(doc.content)
+
+    return DocumentResponse(
+        id = doc.id,
+        title = doc.title,
+        file_size = doc.file_size,
+        file_path = doc.file_path,
+        created_at = doc.created_at,
+        content = doc.content,
+        user_id = doc.user_id,
+        insights= insights
+    )

@@ -112,7 +112,9 @@ export default function Dashboard(){
             'text/markdown': ['.md'],
             'text/html': ['.html'],
             'application/vnd.ms-excel': ['.xls'],
-            'text/csv': ['.csv']
+            'text/csv': ['.csv'],
+            'image/jpeg': ['.jpg', '.jpeg'],
+            'image/png': ['.png']
         },
         multiple: true
     });
