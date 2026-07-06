@@ -192,9 +192,11 @@ export default function ChatAssistant(){
                                 setMessages((prevMessage) => prevMessage.map((message) => 
                                     message.id === assistantMessageId ? {...message, sources: currentSources} : message
                                 ));
-                            } else if (parsedData.text) {// Check if text is from LLM
+                            } else {// Check if text is from LLM
+                                const chunkText = (parsedData.content || parsedData.text);
+                                if (!chunkText) continue;
                                 setMessages((prevMessage) => prevMessage.map((message) => 
-                                    message.id === assistantMessageId ? {...message, content: message.content + parsedData.content} : message
+                                    message.id === assistantMessageId ? {...message, content: message.content + chunkText} : message
                                 ));
                             }
                         } catch (err) {

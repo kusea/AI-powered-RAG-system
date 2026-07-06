@@ -409,7 +409,7 @@ export default function Dashboard(){
                             >
                                 <option value="read">Only read</option>
                                 <option value="write">Only Write</option>
-                                <option value="read and write">Read and Write</option>
+                                <option value="read_write">Read and Write</option>
                             </select>
                         </div>
 

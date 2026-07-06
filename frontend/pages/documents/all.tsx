@@ -1,9 +1,10 @@
 // frontend/pages/documents/all.tsx
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Share2, Loader2, MessageSquare } from "lucide-react";
+import { FileText, Share2, Loader2, MessageSquare, CheckCircle, Trash2, Bot, MoreVertical, Info, Mail, X, Shield} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/router";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdownMenu";
 import api from "@/services/APIclient";
 
 interface UnifiedDocument {
@@ -31,7 +32,7 @@ export default function AllDocuments() {
     const { data: documents = [], isLoading, isError } = useQuery<UnifiedDocument[]>({
         queryKey: ["allUnifiedDocuments"],
         queryFn: async () => {
-        const response = await api.get("/documents/all-unified");
+        const response = await api.get("/documents/all");
         return response.data;
         }
     });
@@ -40,7 +41,7 @@ export default function AllDocuments() {
         setSelectedIds(prevIds => (prevIds.includes(id) ? prevIds.filter(prevId => prevId !== id): ([...prevIds, id])));
     };
 
-    const handleBulkAI = () => {
+    const handleBulkAskAI = () => {
         if (selectedIds.length === 0) return;
         router.push(`/chat?document_ids=${selectedIds.join(",")}&mode=multi`);
     };
@@ -54,6 +55,13 @@ export default function AllDocuments() {
             queryClient.invalidateQueries({queryKey: ["allUnifiedDocuments"]});
             setSelectedIds([]);
         }).catch(err => alert(`Failed to delete documents: ${err.message}`));
+    }
+
+    const handleSingleShareOpen = (document_id: number) => {
+        setSharingDocs([document_id]);
+        setShareEmail("");
+        setSharePermission("read");
+        setIsShareModalOpen(true);
     }
 
     const handleBulkShareOpen = () => {
@@ -107,10 +115,32 @@ export default function AllDocuments() {
                         size="sm"
                         onClick={() => setSelectedIds(selectedIds.length === documents.length ? [] : documents.map(d => d.id))}
                         >
-                        {selectedIds.length === documents.length ? "Deselect all" : "Select all "}
+                            {selectedIds.length === documents.length ? "Deselect all" : "Select all "}
                         </Button>
                     )}
                 </div>
+
+                {selectedIds.length > 0 && (
+                    <div className="mb-6 flex flex-col sm:flex-row items-center justify-between p-4 bg-primary/10
+                                    border border-primary/20 rounded-xl gap-4">
+                        <div className = "flex items-center gap-2 text-sm font-medium">
+                            <CheckCircle className = "h-5 w-5 text-primary" />
+                            <span>Selecting <strong className="text-primary text-base">{selectedIds.length}</strong> documents</span>
+                        </div>
+
+                        <div className = "flex flex-wrap items-center gap-2">
+                            <Button onClick={handleBulkAskAI} variant="outline" className="text-amber-500 border-amber-500/30 hover:bg-amber-500/10 gap-2 h-9 text-xs">
+                                <Bot className="h-4 w-4" /> Ask AI about {selectedIds.length === 1 ? "this document" : "these documents"}
+                            </Button>
+                            <Button onClick={handleBulkShareOpen} variant="outline" className="text-blue-500 border-blue-500/30 hover:bg-blue-500/10 gap-2 h-9 text-xs">
+                                <Share2 className="h-4 w-4" /> Share {selectedIds.length === 1 ? "this document" : "these documents"}
+                            </Button>
+                            <Button onClick={handleBulkDelete} variant="destructive" className="gap-2 h-9 text-xs">
+                                <Trash2 className="h-4 w-4" /> Delete {selectedIds.length === 1 ? "this document" : "these documents"}
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-20">
@@ -126,44 +156,132 @@ export default function AllDocuments() {
                     </p>
                 ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {documents.map((doc) => (
-                    <div 
-                        key={`${doc.is_shared ? 'share' : 'root'}-${doc.id}`}
-                        className={`flex relative items-center justify-between border p-4 rounded-xl shadow-xs transition-all ${
-                        doc.is_shared 
-                            ? "border-blue-200 bg-blue-50/30 dark:bg-blue-950/10"
-                            : "border-border bg-card"
-                        }`}
-                    >
-                        <div className="flex items-center space-x-4 min-w-0">
-                            <div className={`p-2.5 rounded-lg ${doc.is_shared ? "bg-blue-500/10 text-blue-500" : "bg-primary/10 text-primary"}`}>
-                                {doc.is_shared ? <Share2 className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
-                            </div>
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                    <p className="font-medium text-sm truncate max-w-xs md:max-w-md">{doc.title}</p>
-                                    {doc.is_shared && (
-                                        <span className="text-[10px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 shadow-xs">
-                                        Shared
-                                        </span>
-                                    )}
+                    {documents.map((doc) => {
+                        const isChecked = selectedIds.includes(doc.id);
+                        return (
+                            <div 
+                                key={`${doc.is_shared ? 'share' : 'root'}-${doc.id}`}
+                                className={`flex relative items-center justify-between border p-4 rounded-xl shadow-xs transition-all ${
+                                isChecked ? "border-primary bg-primary/5" 
+                                : doc.is_shared ? "border-blue-200 bg-blue-50/20" 
+                                : "bg-card"
+                                }`}
+                            >
+                                <div className = "absolute top-2 right-2 z-10">
+                                    <input 
+                                        type="checkbox"
+                                        title = "select document"
+                                        checked = {isChecked}
+                                        onChange = {() => handleToggleSelect(doc.id)}
+                                        className = "h-4 w-4 rounded accent-primary cursor-pointer"    
+                                    />
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    {doc.is_shared ? `Sender: ${doc.owner_email}` : "Me"} • {new Date(doc.created_at).toLocaleDateString("vi-VN")}
-                                </p>
-                            </div>
-                        </div>
 
-                        <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            onClick={() => router.push(`/chat?document_id=${doc.id}&is_shared=${doc.is_shared}`)}
-                            className={`h-8 w-8 p-0 ${doc.is_shared ? "hover:bg-blue-500/10 text-blue-500" : "hover:bg-primary/10 text-primary"}`}
-                        >
-                            <MessageSquare className="h-4 w-4" /> Ask AI
-                        </Button>
+                                <div className="flex items-center space-x-4 min-w-0">
+                                    <div className={`p-2.5 rounded-lg ${doc.is_shared ? "bg-blue-500/10 text-blue-500" : "bg-primary/10 text-primary"}`}>
+                                        {doc.is_shared ? <Share2 className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium text-sm truncate max-w-xs md:max-w-md">{doc.title}</p>
+                                            {doc.is_shared && (
+                                                <span className="text-[10px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 shadow-xs">
+                                                Shared
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Size: {formatFileSize(doc.file_size)} • {doc.is_shared ? `Sender: ${doc.owner_email}` : "Me"} • Uploaded: {new Date(doc.created_at).toLocaleDateString("vi-VN")}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant = "ghost" size = "icon" className="h-8 w-8 text-muted-foreground">
+                                            <MoreVertical className = "h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+
+                                    <DropdownMenuContent align = "end" className = "w-40">
+                                        <DropdownMenuItem onClick = {() => router.push(`/chat?document_ids=${doc.id}&title=${encodeURIComponent(doc.title)}`)} className = "cursor-pointer gap-2">
+                                            <MessageSquare className = "h-4 w-4" />
+                                            Ask AI about this document
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick = {() => router.push(`/documents/${doc.id}`)} className = "cursor-pointer gap-2">
+                                            <Info className = "h-4 w-4" />
+                                            View document details
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem 
+                                                onClick = {(e) => {
+                                                    e.preventDefault();
+                                                    handleSingleShareOpen(doc.id);
+                                                    e.stopPropagation();
+                                                }} 
+                                                className = "cursor-pointer gap-2">
+                                            <Share2 className = "h-4 w-4" />
+                                            Share document
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                    )})}
+                </div>
+                )}
+                {isShareModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
+                    <div className="bg-card border rounded-xl w-full max-w-md p-6 shadow-lg relative">
+                    <button
+                        title = "Close Modal" 
+                        onClick={() => setIsShareModalOpen(false)} 
+                        className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                    <div className="flex items-center gap-2 mb-4">
+                        <Share2 className="h-5 w-5 text-primary" />
+                        <h3 className="text-lg font-bold">Share {sharingDocs.length === 1 ? "a document" : `${sharingDocs.length} documents`}</h3>
                     </div>
-                    ))}
+                    <form onSubmit={handleConfirmShare} className="space-y-4">
+                        <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
+                            <Mail className="h-3 w-3" /> Sender email
+                        </label>
+                        <input 
+                            type="email" 
+                            required placeholder="name@domain.com" 
+                            value={shareEmail} 
+                            onChange={(e) => setShareEmail(e.target.value)} 
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
+                                <Shield className="h-3 w-3" /> Permission
+                            </label>
+                            <select
+                                title = "Permission" 
+                                value={sharePermission} 
+                                onChange={(e) => setSharePermission(e.target.value)} 
+                                className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
+                            >
+                                <option value="read">Only read</option>
+                                <option value="write">Only write</option>
+                                <option value="read_write">Read and write</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center justify-end space-x-3 pt-2">
+                            <Button type="button" variant="outline" onClick={() => setIsShareModalOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button 
+                                type="submit" 
+                                disabled={isSubmittingShare}
+                            >
+                                {isSubmittingShare ? "Sharing..." : "Confirm Share"}
+                            </Button>
+                        </div>
+                    </form>
+                    </div>
                 </div>
                 )}
             </main>
