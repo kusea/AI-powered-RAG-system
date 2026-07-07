@@ -25,7 +25,7 @@ class ChunkEmbeddingResponse(ChunkEmbeddingBase):
 class DocumentInsight(BaseModel):
     summary: str
     key_points: List[str]
-    keywords: List[str]
+    key_words: List[str]
 
 class DocumentResponse(BaseModel):
     id: int
@@ -35,6 +35,7 @@ class DocumentResponse(BaseModel):
     file_size: Optional[int] = None
     user_id: int
     created_at: datetime
+    is_shared: Optional[bool] = False
     embedding: Optional[List[float]] = None
     insights: Optional[DocumentInsight] = None
 

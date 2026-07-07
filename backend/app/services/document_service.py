@@ -1,9 +1,10 @@
 #Dỉrectly work with SQLAlchemy to store and query vector
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from app.models import Document, ChunkDocument, User, DocumentShare, Notification
+from app.models import Document, ChunkDocument, User, DocumentShare, Notification, DocumentInsight
 from app.schemas.document import ChunkEmbeddingCreate, DocumentShareCreate
 from app.core.notification_mannager import notification_manager
+from app.services import rag_service
 from sentence_transformers import SentenceTransformer
 
 import os 
@@ -11,6 +12,7 @@ import uuid
 import pandas as pd
 import pytesseract
 import pdfplumber
+
 from PIL import Image
 from datetime import datetime, timezone
 from shutil import copyfileobj
@@ -95,11 +97,11 @@ def extract_text_and_chunk(filepath: str, chunk_size: int = 500, chunk_overlap: 
 
                     if not full_page_content.strip():
                         continue
-                    
+
                     start = 0 
                     while start < len(text):
                         end = min(start + chunk_size, len(text))
-                        chunk_text = text[start:end].strip()
+                        chunk_text = full_page_content[start:end].strip()
                         chunks.append({
                             "text": chunk_text,
                             "page": page_nums
@@ -275,7 +277,7 @@ def extract_full_text(filepath: str):
 # Upload file
 UPLOAD_DIR = "storage"
 
-def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tasks):
+async def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tasks):
     user_dir = os.path.join(UPLOAD_DIR, str(user_id))
     os.makedirs(user_dir, exist_ok = True)
 
@@ -301,11 +303,33 @@ def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tas
     ))
 
     document_id = saved_documents.id
+    insights = await rag_service.generate_document_summary(file_content)
+
+    saved_insights = DocumentInsight(
+        document_id = document_id,
+        summary = insights.summary,
+        key_points = insights.key_points,
+        key_words = insights.key_words
+    )
+
+    db.add(saved_insights)
+    db.commit()
     from app.core.database import SessionLocal
 
     background_tasks.add_task(process_chunks_task, SessionLocal, document_id, file_path)
 
-    return saved_documents
+    return {
+        "id": saved_documents.id,
+        "title": saved_documents.title,
+        "file_size": saved_documents.file_size,
+        "created_at": saved_documents.created_at,
+        "is_shared": False,
+        "insights": {
+            "summary": insights.summary,
+            "key_points": insights.key_points,
+            "key_words": insights.key_words
+        }
+    }
 
 def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in background
     db: Session = db_factory()

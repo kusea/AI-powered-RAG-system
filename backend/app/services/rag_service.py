@@ -137,11 +137,11 @@ async def generate_document_summary(document_content: str):
             messages = [
                 {"role": "system", "content": promp},
             ],
-            stream = True, # Set words appear one by one
+            stream = False, # Set words appear one by one
             response_format={"type": "json_object"}
         )
         
-        result_content = response.choices[0].delta.content
+        result_content = response.choices[0].message.content
         return json.loads(result_content)
     except Exception as e:
         print(f"Error during generate document summary: {str(e)}")

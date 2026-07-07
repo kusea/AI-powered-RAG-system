@@ -21,6 +21,7 @@ class Document(Base):
     user = relationship("User", back_populates="documents")
     chunks = relationship("ChunkDocument", back_populates="document", cascade="all, delete-orphan")
     shares = relationship("DocumentShare", back_populates="document", cascade="all, delete-orphan")
+    insights = relationship("DocumentInsight", back_populates="document", cascade="all, delete-orphan")
 
 class DocumentShare(Base):
     __tablename__ = "document_shares"
@@ -37,3 +38,14 @@ class DocumentShare(Base):
     document = relationship("Document", back_populates = "shares")
     shared_by = relationship("User", foreign_keys = [shared_by_id])
     shared_to = relationship("User", foreign_keys = [shared_to_id])
+
+class DocumentInsight(Base):
+    __tablename__ = "document_insights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete = "CASCADE"), nullable = False)
+    summary = Column(Text, nullable = True)
+    key_points = Column(Text, nullable = True)
+    key_words = Column(String(255), nullable = True)
+
+    document = relationship("Document", back_populates="insights")

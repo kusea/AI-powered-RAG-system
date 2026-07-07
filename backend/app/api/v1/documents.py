@@ -20,7 +20,7 @@ def create_document_embedding(item: ChunkEmbeddingResponse, db: Session = Depend
     return document_service.save_chunks_embeddings(db, item)
 
 @router.post("/upload", response_model = DocumentResponse)
-def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     allowed_extensions = [".pdf", ".docx", ".txt", ".pptx", ".xlsx", ".csv", ".html", ".xls", ".md", ".png", ".jpg", ".jpeg"]
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in allowed_extensions:
@@ -29,7 +29,7 @@ def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(.
             detail = "Invalid file type. Only PDF, DOCX, TXT, PPTX, XLSX, CSV, HTML, XLS, MD, XLSX, JPG, JPEG, PNG files are allowed.")
     
     try:
-        return document_service.save_loaded_file(db, file, current_user.id, background_tasks)
+        return await document_service.save_loaded_file(db, file, current_user.id, background_tasks)
     except Exception as e:
         print(f"An error occurred while saving the file: {str(e)}")
         raise HTTPException(
@@ -92,6 +92,11 @@ def get_all_documents(db: Session = Depends(get_db), current_user: User = Depend
             "file_size": doc.file_size,
             "created_at": doc.created_at.isoformat(),
             "is_shared": False,
+            "insights": {
+                "summary": doc.insights.summary,
+                "key_points": doc.insights.key_points,
+                "key_words": doc.insights.key_words
+            }
         })
 
     for share in shared_docs:
@@ -102,7 +107,12 @@ def get_all_documents(db: Session = Depends(get_db), current_user: User = Depend
                 "file_size": share.document.file_size,
                 "created_at": share.document.created_at.isoformat(),
                 "is_shared": True,
-                "owner_email": share.document.user.email
+                "owner_email": share.document.user.email,
+                "insights": {
+                    "summary": share.document.insights.summary,
+                    "key_points": share.document.insights.key_points,
+                    "key_words": share.document.insights.key_words
+                }
             })
 
     result = sorted(result, key=lambda x: x["created_at"], reverse=True)
