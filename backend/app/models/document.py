@@ -1,5 +1,5 @@
 # models.py
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -45,7 +45,7 @@ class DocumentInsight(Base):
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, ForeignKey("documents.id", ondelete = "CASCADE"), nullable = False)
     summary = Column(Text, nullable = True)
-    key_points = Column(Text, nullable = True)
-    key_words = Column(String(255), nullable = True)
+    key_points = Column(JSON, nullable = True)
+    key_words = Column(JSON, nullable = True)
 
     document = relationship("Document", back_populates="insights")

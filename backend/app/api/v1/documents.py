@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.document import ChunkEmbeddingResponse, DocumentResponse, DocumentShareResponse, DocumentShareCreate
+from app.schemas.document import ChunkEmbeddingResponse, DocumentResponse, DocumentShareResponse, DocumentShareCreate, DocumentInsightResponse
 from pydantic import BaseModel
 
 import os;
@@ -20,7 +20,7 @@ def create_document_embedding(item: ChunkEmbeddingResponse, db: Session = Depend
     return document_service.save_chunks_embeddings(db, item)
 
 @router.post("/upload", response_model = DocumentResponse)
-async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     allowed_extensions = [".pdf", ".docx", ".txt", ".pptx", ".xlsx", ".csv", ".html", ".xls", ".md", ".png", ".jpg", ".jpeg"]
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in allowed_extensions:
@@ -29,7 +29,7 @@ async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = 
             detail = "Invalid file type. Only PDF, DOCX, TXT, PPTX, XLSX, CSV, HTML, XLS, MD, XLSX, JPG, JPEG, PNG files are allowed.")
     
     try:
-        return await document_service.save_loaded_file(db, file, current_user.id, background_tasks)
+        return document_service.save_loaded_file(db, file, current_user.id, background_tasks)
     except Exception as e:
         print(f"An error occurred while saving the file: {str(e)}")
         raise HTTPException(
@@ -92,11 +92,6 @@ def get_all_documents(db: Session = Depends(get_db), current_user: User = Depend
             "file_size": doc.file_size,
             "created_at": doc.created_at.isoformat(),
             "is_shared": False,
-            "insights": {
-                "summary": doc.insights.summary,
-                "key_points": doc.insights.key_points,
-                "key_words": doc.insights.key_words
-            }
         })
 
     for share in shared_docs:
@@ -108,32 +103,20 @@ def get_all_documents(db: Session = Depends(get_db), current_user: User = Depend
                 "created_at": share.document.created_at.isoformat(),
                 "is_shared": True,
                 "owner_email": share.document.user.email,
-                "insights": {
-                    "summary": share.document.insights.summary,
-                    "key_points": share.document.insights.key_points,
-                    "key_words": share.document.insights.key_words
-                }
             })
 
     result = sorted(result, key=lambda x: x["created_at"], reverse=True)
     return result
 
+@router.get("/{document_id}/insights", response_model = DocumentInsightResponse)
+async def get_document_insights(db: Session = Depends(get_db), document_id: int = None):
+    return await document_service.get_document_insights(db, document_id)
+
 
 @router.get("/{document_id}", response_model = DocumentResponse)
-async def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):
+def get_document(db: Session = Depends(get_db), document_id: int = None, current_user: User = Depends(get_current_user)):
     doc = db.query(Document).filter(Document.id == document_id and Document.user_id == current_user.id and Document.deleted_at == None).first()
     if not doc:
         raise HTTPException(status_code = status.HTTP_404_NOT_FOUND, detail = "Document not found in your account's storage.")
-    
-    insights = await rag_service.generate_document_summary(doc.content)
 
-    return DocumentResponse(
-        id = doc.id,
-        title = doc.title,
-        file_size = doc.file_size,
-        file_path = doc.file_path,
-        created_at = doc.created_at,
-        content = doc.content,
-        user_id = doc.user_id,
-        insights= insights
-    )
+    return doc

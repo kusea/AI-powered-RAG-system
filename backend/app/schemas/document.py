@@ -1,5 +1,5 @@
 # schemas.py
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import List, Optional
 from datetime import datetime
 import json
@@ -22,10 +22,15 @@ class ChunkEmbeddingResponse(ChunkEmbeddingBase):
     class Config:
         from_attributes = True
 
-class DocumentInsight(BaseModel):
-    summary: str
-    key_points: List[str]
-    key_words: List[str]
+class DocumentInsightResponse(BaseModel):
+    id: int
+    document_id: int
+    summary: Optional[str] = ""
+    key_points: Optional[List[str]] = []
+    key_words: Optional[List[str]] = []
+
+    class Config:
+        from_attributes = True
 
 class DocumentResponse(BaseModel):
     id: int
@@ -33,11 +38,10 @@ class DocumentResponse(BaseModel):
     content: Optional[str] = None
     file_path: Optional[str] = None
     file_size: Optional[int] = None
-    user_id: int
+    user_id: Optional[int] = None
     created_at: datetime
     is_shared: Optional[bool] = False
     embedding: Optional[List[float]] = None
-    insights: Optional[DocumentInsight] = None
 
     class Config: 
         from_attributes = True

@@ -277,7 +277,7 @@ def extract_full_text(filepath: str):
 # Upload file
 UPLOAD_DIR = "storage"
 
-async def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tasks):
+def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tasks):
     user_dir = os.path.join(UPLOAD_DIR, str(user_id))
     os.makedirs(user_dir, exist_ok = True)
 
@@ -301,34 +301,20 @@ async def save_loaded_file(db: Session, file: UploadFile, user_id: int, backgrou
         file_path=file_path, 
         file_size=os.path.getsize(file_path)
     ))
-
+    print("Saved_documents: ", saved_documents.title)
     document_id = saved_documents.id
-    insights = await rag_service.generate_document_summary(file_content)
 
-    saved_insights = DocumentInsight(
-        document_id = document_id,
-        summary = insights.summary,
-        key_points = insights.key_points,
-        key_words = insights.key_words
-    )
-
-    db.add(saved_insights)
-    db.commit()
     from app.core.database import SessionLocal
 
     background_tasks.add_task(process_chunks_task, SessionLocal, document_id, file_path)
 
+    print("Saved_documents ID: ", saved_documents.id)
     return {
         "id": saved_documents.id,
         "title": saved_documents.title,
         "file_size": saved_documents.file_size,
         "created_at": saved_documents.created_at,
-        "is_shared": False,
-        "insights": {
-            "summary": insights.summary,
-            "key_points": insights.key_points,
-            "key_words": insights.key_words
-        }
+        "is_shared": False
     }
 
 def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in background
@@ -352,6 +338,34 @@ def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in 
 
 def get_user_document(db: Session, user_id: int) -> list[Document]:
     return db.query(Document).filter(Document.user_id == user_id, Document.deleted_at == None).all()
+
+async def get_document_insights(db: Session, document_id: int) -> DocumentInsight:
+    existing_insight = db.query(DocumentInsight).filter(DocumentInsight.document_id == document_id).first()
+    if existing_insight:
+        return existing_insight
+    
+    doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found in your account's storage.")
+    try: 
+        insights = await rag_service.generate_document_summary(doc.content)
+        saved_insights = DocumentInsight(
+            document_id = document_id,
+            summary = insights["summary"],
+            key_points = list(insights["key_points"]),
+            key_words = list(insights["key_words"])
+        )
+        db.add(saved_insights)
+        db.commit()
+        return saved_insights
+    except Exception as e:
+        print(f"Error during getting insights of document {document_id}: {str(e)}")
+        return DocumentInsight(
+            document_id = document_id,
+            summary = "Not summary available",
+            key_points = [],
+            key_words = []
+        )
 
 def delete_document(db: Session, document_ids: list[int], user_id: int):
     docs = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == user_id, Document.deleted_at == None)
