@@ -5,12 +5,21 @@ import { Button } from "@/components/ui/button";
 import { FileText, ArrowLeft, MessageSquare, Calendar, HardDrive, Share2 } from "lucide-react";
 import Link from "next/link";
 import api from "@/services/APIclient";
+import { Insights } from "@/components/DocumentCard";
 
 // Hàm gọi API lấy chi tiết 1 tài liệu dựa trên ID
 export default function DocumentDetail() {
     const router = useRouter();
-    const { id } = router.query; // Lấy ID tài liệu từ URL
-    // Dùng React Query để cache và quản lý dữ liệu
+    const { id } = router.query;
+
+    const {data: documentInsights} = useQuery<Insights>({
+        queryKey: ["documentInsights", id],
+        queryFn: async () => {
+            if (!id) return null;
+            const response = await api.get(`/documents/${id}/insights`);
+            return response.data;
+        }
+    })
     const { data: doc, isLoading, isError } = useQuery({
         queryKey: ["documentDetail", id],
         queryFn: async () => {
@@ -75,11 +84,52 @@ export default function DocumentDetail() {
                 </div>
             </div>
 
-            <div className="space-y-3">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                    Preview
-                </h2>
+            <div className="border rounded-xl bg-muted/30 shadow-inner overflow-hidden">
+                <div className="bg-muted px-4 py-2 border-b text-xs text-muted-foreground flex justify-between items-center">
+                    <span>INSIGHT OF THE DOCUMENT</span>
+                </div>
+                
+                {/* Content area */}
+                <div className="p-6 max-h-100 overflow-y-auto font-mono text-sm leading-relaxed whitespace-pre-wrap bg-card">
+                    {documentInsights ? (
+                        <div className="p-4 space-y-3 text-xs">
+                            <div>
+                                <span className="font-semibold text-primary block mb-1">📝 Quick summary:</span>
+                                <p className="text-muted-foreground leading-relaxed">
+                                    {documentInsights?.summary || "No summary available"}
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <span className="font-semibold text-primary block mb-1">📌 Key points:</span>
+                                <ul className="list-inside space-y-1 text-muted-foreground">
+                                    {documentInsights?.key_points.map((point, index) => (
+                                    <li key={index} className="flex items-start gap-1">
+                                        <span className="text-primary/70 mt-0.5">•</span>
+                                        <span>{point}</span>
+                                    </li>
+                                    )) || "No key points available"}
+                                </ul>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1 pt-1">
+                                {documentInsights?.key_words.map((kw, index) => (
+                                    <span
+                                        key={index}
+                                        className="px-2 py-0.5 bg-primary/5 text-primary text-[10px] rounded-full border border-primary/10 font-medium"
+                                        >
+                                            #{kw}
+                                    </span>
+                                )) || "No key words available"}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-muted-foreground italic text-center py-8">
+                            This document is empty or the content is not available.
+                        </p>
+                    )}
+                </div>
+            </div>
             
             <div className="border rounded-xl bg-muted/30 shadow-inner overflow-hidden">
                 <div className="bg-muted px-4 py-2 border-b text-xs text-muted-foreground flex justify-between items-center">
@@ -97,7 +147,6 @@ export default function DocumentDetail() {
                         </p>
                     )}
                 </div>
-            </div>
             </div>
         </div>
     );

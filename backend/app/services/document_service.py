@@ -17,7 +17,6 @@ from PIL import Image
 from datetime import datetime, timezone
 from shutil import copyfileobj
 from fastapi import UploadFile, HTTPException
-from pypdf import PdfReader
 from docx import Document as DocxReader 
 from pptx import Presentation
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
@@ -26,6 +25,7 @@ from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharac
 # Encode content (or title) text to vector embedding
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
+pytesseract.pytesseract.tesseract_cmd = r'D:\Tesseract-OCR\tesseract.exe'
 def save_chunks_embeddings(db: Session, item: ChunkEmbeddingCreate, doc_id:int = None):
     text_encode = item.content if item.content else item.title
     text_embedding = embedding_model.encode(text_encode).tolist() # Convert numpy array to list for JSON serialization

@@ -27,7 +27,6 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
     AI_BASE_URL: str = os.getenv("AI_BASE_URL")
-
     class Config:
         env_file = ".env"
         extra = "ignore" # Ignore extra fields in the .env file that are not defined in this Settings class

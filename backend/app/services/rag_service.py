@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.models import Document, ChunkDocument, ChatMessage, ChatSession
 from app.core.config import settings
 from sentence_transformers import SentenceTransformer
@@ -17,6 +18,8 @@ openai_client = AsyncOpenAI(
     api_key=settings.OPENAI_API_KEY
 ) #Need to add AI api key later in .env
 SEARCH_LIMIT = 20
+"""
+USE THE SEARCH HYBRID TO REPLACE JUST ONLY SEARCH BY VECTOR SEMANTIC 
 def search_similar_embeddings(db: Session, query_text: str, limit: int, document_ids: Optional[List[int]] = None) -> List[Document]:
     query_vector = embedding_model.encode(query_text).tolist()
     if len(query_vector) != settings.VECTOR_DIMENSION:
@@ -29,7 +32,7 @@ def search_similar_embeddings(db: Session, query_text: str, limit: int, document
     results = query.order_by(
         ChunkDocument.embedding.cosine_distance(query_vector)
     ).limit(limit).all()
-    return results
+    return results """
 
 async def generate_chat_stream(db: Session, query_text: str, document_ids: Optional[List[int]] = None, 
                                 isNewSession: bool = False, session_id: int = None, session_title: str = None):
@@ -37,7 +40,7 @@ async def generate_chat_stream(db: Session, query_text: str, document_ids: Optio
         session_info = {"id": session_id, "title": session_title}
         yield f"data: {json.dumps({"session_info": session_info})}\n\n"
     
-    relevant_docs = search_similar_embeddings(db, query_text, SEARCH_LIMIT, document_ids)
+    relevant_docs = search_hybrid(db, query_text, SEARCH_LIMIT, document_ids)
     relev_docs = [db.query(Document).get(doc.document_id) for doc in relevant_docs]
     print(f"\n------Relevant docs: {[f"Doc {doc.id}: {doc.title}\n" for doc in relev_docs]}----------\n")
     # Prepare the content to make context for prompt and source metadata
@@ -150,3 +153,46 @@ async def generate_document_summary(document_content: str):
             "key_points": [str(e)],
             "key_words": []
         }
+    
+def reciprocal_rank_fusion(vector_results, fts_results, k = 60 ): # default const k value = 60
+    rrf_scores = {}
+
+    # Calculate RRF score for each document based on vector
+    for rank, doc in enumerate(vector_results):
+        doc_id = doc.id
+        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + 1.0 / (rank + 1 + k)
+
+    for rank, doc in enumerate(fts_results):
+        doc_id = doc.id
+        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + 1.0 / (rank + 1 + k)
+
+    sorted_doc_ids = sorted(rrf_scores.items(), key=lambda item: item[1], reverse=True) # sort and transfer the rrf_scores list of dict into list of set
+    return sorted_doc_ids
+
+def search_hybrid(db: Session, query_text: str, limit: int, document_ids: Optional[list[int]] = None):
+    # Vector search
+    query_vector = embedding_model.encode(query_text).tolist()
+    vector_query = db.query(ChunkDocument)
+    if document_ids:
+        vector_query = vector_query.filter(ChunkDocument.document_id.in_(document_ids))
+    vector_results = vector_query.order_by(
+        ChunkDocument.embedding.cosine_distance(query_vector)
+    ).limit(limit).all()
+    
+    # Full text search (BM25 - Postgre)
+    fts_query = db.query(ChunkDocument).filter(
+        func.to_tsvector('english', ChunkDocument.content).match(query_text, language="english")
+    )
+    if document_ids:
+        fts_query = fts_query.filter(Document.id.in_(document_ids))
+    fts_results = fts_query.limit(limit*2).all()
+    
+    combined_ranks =  reciprocal_rank_fusion(vector_results, fts_results)
+
+    final_chunks = []
+    chunk_map = {c.id: c for c in vector_results + fts_results}
+
+    for doc_id, score in combined_ranks[:limit]:
+        final_chunks.append(chunk_map[doc_id])
+
+    return final_chunks
