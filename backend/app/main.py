@@ -1,5 +1,7 @@
 # main.py
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+import os
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -53,6 +55,11 @@ app.include_router(documents.router, prefix = "/api/v1/documents", tags = ["Docu
 app.include_router(auth.router, prefix = "/api/v1/auth", tags = ["Authentication"])
 app.include_router(profile.router, prefix = "/api/v1/profile", tags = ["Profile"])
 app.include_router(notification.router, prefix = "/api/v1/notification", tags = ["Notification"])
+
+if not os.path.exists("storage"): # Create storage directory if it doesn't exist
+    os.makedirs("storage")
+
+app.mount("/storage", StaticFiles(directory = "storage"), name = "storage")
 
 @app.get("/", tags = ["Health Check"])
 def read_root():
