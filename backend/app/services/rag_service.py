@@ -34,13 +34,21 @@ def search_similar_embeddings(db: Session, query_text: str, limit: int, document
     ).limit(limit).all()
     return results """
 
-async def generate_chat_stream(db: Session, query_text: str, document_ids: Optional[List[int]] = None, 
+async def generate_chat_stream(background_tasks,db: Session, query_text: str, document_ids: Optional[List[int]] = None, 
                                 isNewSession: bool = False, session_id: int = None, session_title: str = None):
     if isNewSession:
         session_info = {"id": session_id, "title": session_title}
         yield f"data: {json.dumps({"session_info": session_info})}\n\n"
     
-    relevant_docs = search_hybrid(db, query_text, SEARCH_LIMIT, document_ids)
+    chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    user_message = ChatMessage(session_id = session_id, role = "user", content = query_text)
+    chat_session.messages.append(user_message)
+    db.add(user_message)
+    db.commit()
+
+    search_query = await condense_query(db, session_id, query_text)
+
+    relevant_docs = search_hybrid(db, search_query, SEARCH_LIMIT, document_ids)
     relev_docs = [db.query(Document).get(doc.document_id) for doc in relevant_docs]
     print(f"\n------Relevant docs: {[f"Doc {doc.id}: {doc.title}\n" for doc in relev_docs]}----------\n")
     # Prepare the content to make context for prompt and source metadata
@@ -106,6 +114,8 @@ async def generate_chat_stream(db: Session, query_text: str, document_ids: Optio
         session.messages.append(assistant_message)
         db.add(assistant_message)
         db.commit()
+
+        background_tasks.add_task(evaluate_rag_response, search_query, context_str, assistant_chat_content)
 
     except Exception as err:
         print("--------- ERROR IN STREAM PROCESS ----------")
@@ -196,3 +206,74 @@ def search_hybrid(db: Session, query_text: str, limit: int, document_ids: Option
         final_chunks.append(chunk_map[doc_id])
 
     return final_chunks
+
+# Use chat history in the session to condense new user's chat/question into an independent question with full context
+async def condense_query(db: Session, session_id: int, current_query: str):
+    if not session_id:
+        return current_query
+    
+    history_messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc())
+        .limit(SEARCH_LIMIT)
+        .all())
+    
+    if not history_messages:
+        return current_query
+    
+    history = [f"{m.role}: {m.content}" for m in history_messages]
+    chat_history = "\n".join(history)
+    
+    condense_prompt = (
+        "Given the following chat history and a follow-up question, rephrase the follow-up question "
+        "to be a standalone question, in its original language, containing all necessary context.\n\n"
+        f"Chat History:\n{chat_history}"
+        f"Follow-up Question: {current_query}\n"
+        "Standalone Question:"
+    )
+
+    try:
+        response = await openai_client.chat.completions.create(
+            models = "llama-3.3-70b-versatile",
+            messages = [{"role": "system", "content": condense_prompt}],
+            stream = False,
+        )
+
+        condensed_query = response.choices[0].message.content.strip()
+        print(f"------ Original question: {current_query} ------\n------ Condensed question: {condensed_query} ------\n")
+        return condensed_query
+    except Exception as e:
+        print(f"Error during condense query: {str(e)}")
+        return current_query
+    
+def evaluate_rag_response(query: str, context: str, response: str):
+    """
+    Evaluate the quality and relevance of the RAG response based on the query, context, and response based on LLM-as-a-Judge method, can be run in the background to save the assessment in the database.
+    """
+    eval_prompt = (
+        "You are an expert auditor evaluating a Retrieval-Augmented Generation (RAG) system.\n"
+        "Analyze the input query, retrieved context, and system response provided below. "
+        "Rate the response on the following three metrics from 0.0 to 1.0 (where 1.0 is perfect).\n\n"
+        f"1. Query: {query}\n"
+        f"2. Context: {context}\n"
+        f"3. Response: {response}\n\n"
+        "Metrics Definition:\n"
+        "- faithfulness: Is the response strictly derived from the context without adding outside info?\n"
+        "- answer_relevance: Does the response directly address the user's query?\n"
+        "- context_precision: Did the retrieved context contain focused, relevant information to answer the query?\n\n"
+        "Return a standard JSON object EXACTLY with keys: 'faithfulness', 'answer_relevance', 'context_precision', and 'reasoning' (brief explanation)."
+    )
+
+    try:
+        response = openai_client.chat.completions.create(
+            model = "llama-3.3-70b-versatile",
+            messages = [{"role": "system", "content": eval_prompt}],
+            stream = False,
+            response_format = {"type": "json_object"}
+        )
+        result = json.loads(response.choices[0].message.content)
+        return result
+    except Exception as e:
+        print(f"Error during evaluation: {str(e)}")
+        return {"faithfulness": 0.0, "answer_relevance": 0.0, "context_precision": 0.0, "reasoning": "Evaluation failed.", "error": str(e)}

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
@@ -19,7 +19,7 @@ def search_vector(request: ChatQueryRequest, db: Session = Depends(get_db)):
     return rag_service.search_similar_embeddings(db, request.query, request.limit)
 
 @router.post("/query")
-async def query(request: ChatQueryStream = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def query(background_tasks: BackgroundTasks, request: ChatQueryStream = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     print(f"REQUEST_QUERTY: {request.query}")
     session_title = ""
     session_id = request.session_id
@@ -50,7 +50,7 @@ async def query(request: ChatQueryStream = Body(...), db: Session = Depends(get_
     db.commit()
 
     return StreamingResponse(
-        rag_service.generate_chat_stream(db, request.query, request.document_ids, is_new_session, session_id, session_title),
+        rag_service.generate_chat_stream(background_tasks, db, request.query, request.document_ids, is_new_session, session_id, session_title),
         media_type = "text/event-stream"
     )
 

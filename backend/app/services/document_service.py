@@ -5,6 +5,7 @@ from app.models import Document, ChunkDocument, User, DocumentShare, Notificatio
 from app.schemas.document import ChunkEmbeddingCreate, DocumentShareCreate
 from app.core.notification_mannager import notification_manager
 from app.services import rag_service
+from app.core.database import SessionLocal
 from sentence_transformers import SentenceTransformer
 
 import os 
@@ -12,6 +13,7 @@ import uuid
 import pandas as pd
 import pytesseract
 import pdfplumber
+import io
 
 from PIL import Image
 from datetime import datetime, timezone
@@ -20,6 +22,9 @@ from fastapi import UploadFile, HTTPException
 from docx import Document as DocxReader 
 from pptx import Presentation
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+from googleapiclient.http import MediaIoBaseDownload
 
 
 # Encode content (or title) text to vector embedding
@@ -274,6 +279,24 @@ def extract_full_text(filepath: str):
     
     return full_text.strip()
 
+def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in background
+    db: Session = db_factory()
+    try:
+        chunks = extract_text_and_chunk(file_path)
+        for chunk in chunks:
+            if not chunk['text'].strip():
+                continue
+            chunk_data = ChunkEmbeddingCreate(
+                content=chunk['text'],
+                document_id=document_id
+            )
+            save_chunks_embeddings(db, chunk_data, doc_id=document_id)
+            print(f"Background tasks completed for all chunks of document that has id {document_id}")
+    except Exception as e:
+        print(f"Error during background tasks during processing chunks of document {document_id}: {str(e)}")
+    finally:
+        db.close()
+
 # Upload file
 UPLOAD_DIR = "storage"
 
@@ -304,8 +327,6 @@ def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tas
     print("Saved_documents: ", saved_documents.title)
     document_id = saved_documents.id
 
-    from app.core.database import SessionLocal
-
     background_tasks.add_task(process_chunks_task, SessionLocal, document_id, file_path)
 
     print("Saved_documents ID: ", saved_documents.id)
@@ -317,24 +338,76 @@ def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tas
         "is_shared": False
     }
 
-def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in background
-    db: Session = db_factory()
-    try:
-        chunks = extract_text_and_chunk(file_path)
-        for chunk in chunks:
-            if not chunk['text'].strip():
-                continue
-            chunk_data = ChunkEmbeddingCreate(
-                content=chunk['text'],
-                document_id=document_id
-            )
-            save_chunks_embeddings(db, chunk_data, doc_id=document_id)
-            print(f"Background tasks completed for all chunks of document that has id {document_id}")
-    except Exception as e:
-        print(f"Error during background tasks during processing chunks of document {document_id}: {str(e)}")
-    finally:
-        db.close()
-        
+
+
+# Mime type Google Workspace to normal mime type
+GOOGLE_MIME_TYPE_MAPPING = {
+    "application/vnd.google-apps.document": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
+    "application/vnd.google-apps.spreadsheet": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+    "application/vnd.google-apps.presentation": ("application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx")
+}
+
+def download_file_from_google_drive (file_id: str, access_token: str, user_id: int):
+    creds = Credentials(token = access_token)
+    services = build('drive', 'v3', credentials = creds)
+
+    file_metadata = services.files().get(fileId = file_id, fields = "name, mimeType").execute()
+    original_filename = file_metadata['name']
+    mime_type = file_metadata['mimeType']
+
+    user_dir = os.path.join(UPLOAD_DIR, str(user_id))
+    if not user_dir: 
+        os.makedirs(user_dir, exist_ok = True)
+
+    file_extension = GOOGLE_MIME_TYPE_MAPPING[mime_type][1] if mime_type in GOOGLE_MIME_TYPE_MAPPING else os.path.splitext(original_filename)[1]
+    # if mime_type is google_mime_type (google docx, google sheet, google pptx), then we need to use export_media
+    # else we need to use get_media to download directly 
+    request = services.files().export_media(fileId = file_id, fields = "name, mimeType") if mime_type in GOOGLE_MIME_TYPE_MAPPING else services.files().get_media(fileId = file_id)
+
+
+    file_name = str(uuid.uuid4()) + file_extension
+
+    file_path = os.path.join(user_dir, file_name)
+    with open(file_path, "wb") as buffer:
+        downloader = MediaIoBaseDownload(buffer, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+            print(f"Downloaded {int(status.progress() * 100)}%.")
+
+    return file_path, original_filename
+
+def save_google_drive_file(db: Session, file_id: str, access_token: str, user_id: int, background_tasks):
+    file_path, original_filename = download_file_from_google_drive(file_id, access_token, user_id)
+
+    document = db.query(Document).filter(Document.title == original_filename and Document.user_id == user_id, Document.deleted_at == None).first()
+
+    if document:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code = 400, detail = "Document with the same name already exists.")
+    
+    file_content = extract_full_text(file_path)
+
+    saved_documents = save_chunks_embeddings(db, ChunkEmbeddingCreate(
+        title = original_filename,
+        content = file_content,
+        file_path = file_path,
+        file_size = os.path.getsize(file_path),
+        user_id = user_id
+    ))
+
+    background_tasks.add_task(process_chunks_task, SessionLocal, saved_documents.id, file_path)
+
+    return {
+        "id": saved_documents.id,
+        "title": original_filename,
+        "file_size": saved_documents.file_size,
+        "created_at": saved_documents.created_at,
+        "is_shared": False
+    }
+
+
 
 def get_user_document(db: Session, user_id: int) -> list[Document]:
     return db.query(Document).filter(Document.user_id == user_id, Document.deleted_at == None).all()
@@ -375,6 +448,21 @@ def delete_document(db: Session, document_ids: list[int], user_id: int):
     docs.update({"deleted_at": datetime.now(timezone.utc)}, synchronize_session = False)
     db.commit()
     return {"message": "Move document to trash successfully!!!"}
+
+def get_trash_document(db: Session, user_id: int):
+    share_doc_table = db.query(Document).join(DocumentShare)
+    exist_stmt = share_doc_table.exists()
+    is_exist = db.query(exist_stmt).scalar()
+
+    if is_exist:
+        return share_doc_table.filter(
+            or_(
+                DocumentShare.shared_to_id == user_id, 
+                Document.user_id == user_id
+            ),
+            Document.deleted_at != None
+        ).all()
+    return db.query(Document).filter(Document.user_id == user_id, Document.deleted_at != None).all()
 
 def restore_document(db: Session, document_ids: list[int], user_id: int):
     docs = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == user_id, Document.deleted_at != None)
@@ -499,17 +587,3 @@ def get_shared_document(db: Session, user_id: int, filter_condition):
         "shared_at": dict["shared_at"]
     } for dict, email_share_by, email_share_to in zip(raw_dict, list_email_share_by, list_email_share_to)]
     
-def get_trash_document(db: Session, user_id: int):
-    share_doc_table = db.query(Document).join(DocumentShare)
-    exist_stmt = share_doc_table.exists()
-    is_exist = db.query(exist_stmt).scalar()
-
-    if is_exist:
-        return share_doc_table.filter(
-            or_(
-                DocumentShare.shared_to_id == user_id, 
-                Document.user_id == user_id
-            ),
-            Document.deleted_at != None
-        ).all()
-    return db.query(Document).filter(Document.user_id == user_id, Document.deleted_at != None).all()

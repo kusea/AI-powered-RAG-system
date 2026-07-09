@@ -37,6 +37,10 @@ def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(.
             detail = f"An error occurred while saving the file: {str(e)}"
         )
     
+@router.get("/google-drive", response_model = DocumentResponse)
+def upload_document_from_google_drive(background_tasks: BackgroundTasks, file_id: str, access_token: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return document_service.save_google_drive_file(db, file_id, access_token, current_user.id, background_tasks)
+    
 @router.get("/", response_model = List[DocumentResponse])
 def list_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return document_service.get_user_document(db, current_user.id) # Use for deleting multiple documents, if only 1 document, pass 1 value into list
