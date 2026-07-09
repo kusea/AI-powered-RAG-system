@@ -127,7 +127,7 @@ async def generate_document_summary(document_content: str):
     promp = (
         "YOU ARE AN AI ASSISTANT INTEGRATED INTO AN INTERNAL DOCUMENT MANAGEMENT SYSTEM (RAG SYSTEM)."
         "YOU HAVE FULL PERMISSION TO ACCESS AND READ THE USER'S EXTRACTED FILE DATA PROVIDED BELOW."
-        "Your tasks: Read the document(s) and return a standard JSON object with summary, key_points and key_words satisfying the following requirements:"
+        "Your tasks: Read the document(s), combine with the information you search on the Internet about the document(s) and return a standard JSON object with summary, key_points and key_words satisfying the following requirements:"
         "1. 'summary': A overview (at most 200 words, about 3-5 sentences) of the document(s)."
         "2. 'key_points': A list of 5 key points extracted from the document(s)."
         "3. 'key_words': A list of 5 keywords from the document(s)."

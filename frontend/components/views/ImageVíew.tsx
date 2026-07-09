@@ -2,27 +2,13 @@ import React, { useState } from "react";
 import { Maximize2, X } from "lucide-react"; 
 import Image from "next/image";
 
-const PUBLIC_URL = "http://localhost:8000";
-
 export const ImageView: React.FC<{fileUrl: string, altText: string}> = ({fileUrl, altText}) => {
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
-    const formatImageUrl = (url: string) => {
-        if (!url) return "/";
-
-        let cleanURL = url.replace(/\\/g, "/");
-
-        if (!cleanURL.startsWith("/")) cleanURL = "/" + cleanURL;
-        if (!cleanURL.startsWith("http") || !cleanURL.startsWith("https")) cleanURL = PUBLIC_URL + cleanURL;
-        return cleanURL;
-    };
-    const formattedUrl = formatImageUrl(fileUrl);
-        console.log(`Image URL: ${formattedUrl}`);
 
     return (
         <div className="flex flex-col items-center justify-center p-6 bg-muted/10 border border-dashed rounded-xl relative group max-w-4xl w-full h-100 mx-auto">
             <Image
-                src={formattedUrl}
+                src={fileUrl}
                 alt={altText}
                 fill
                 className="object-contain transition-transform duration-200 hover:scale-[1.01]"
@@ -53,7 +39,7 @@ export const ImageView: React.FC<{fileUrl: string, altText: string}> = ({fileUrl
                     </button>
                     <div className = "relative w-full h-full max-w-5xl max-h-[85vh]">
                         <Image
-                            src = {formattedUrl}
+                            src = {fileUrl}
                             alt = {altText}
                             fill
                             className = "object-contain animate-in zoom-in-95 duration-150"

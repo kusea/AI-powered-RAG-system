@@ -12,22 +12,31 @@ interface DocumentViewerProps {
 
 export const DocumentView: React.FC<DocumentViewerProps> = ({fileUrl, fileName, textContent,}) => {
     const extension = useMemo(() => fileName.split(".").pop()?.toLowerCase(), [fileName]);
-
+    const formatImageUrl = (url: string) => {
+            if (!url) return "/";
+            let cleanURL = url.replace(/\\/g, "/");
+    
+            if (cleanURL.startsWith("http://") || cleanURL.startsWith("https://")) return cleanURL;
+            const BACKEND_URL = "http://localhost:8000";
+            cleanURL = `${BACKEND_URL}/${cleanURL}`;
+            return cleanURL;
+        };
+    const formattedUrl = formatImageUrl(fileUrl);
     switch (extension) {
         case "xlsx":
         case "xls":
         case "csv":
-        return <ExcelViewer fileUrl={fileUrl} textContent={textContent} />;
+        return <ExcelViewer fileUrl={formattedUrl} textContent={textContent} />;
         
         case "png":
         case "jpg":
         case "jpeg":
         case "gif":
         case "bmp":
-        return <ImageView fileUrl={fileUrl} altText={fileName} />;
+        return <ImageView fileUrl={formattedUrl} altText={fileName} />;
         
         case "pdf":
-        return <PdfView fileUrl={fileUrl} />;
+        return <PdfView fileUrl={formattedUrl} />;
         
         default:
         // Các file văn bản thô như .txt, .md hoặc fall-back text từ .docx
