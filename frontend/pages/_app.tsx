@@ -7,6 +7,7 @@ import NavBar from "@/components/Navbar";
 import { useRouter } from "next/router";
 import { Loader2 } from "lucide-react"
 import Footer from "@/components/Footer";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -57,11 +58,13 @@ export default function App({ Component, pageProps }: AppProps) {
         <QueryClientProvider client = {queryClient}>
             <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
                 <div className="h-screen overflow-auto bg-background text-foreground flex flex-col">
-                    <NavBar />
-                    <div className = "flex-1 w-full pb-12">
-                        <Component {...pageProps} />
-                    </div>
-                    <Footer />
+                    <GoogleOAuthProvider clientId = {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""}>
+                        <NavBar />
+                        <div className = "flex-1 w-full pb-12">
+                            <Component {...pageProps} />
+                        </div>
+                        <Footer />
+                    </GoogleOAuthProvider>
                 </div>
             </ThemeProvider>
         </QueryClientProvider>

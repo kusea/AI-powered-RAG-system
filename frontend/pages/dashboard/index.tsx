@@ -3,13 +3,28 @@ import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { UploadCloud, CheckCircle, AlertCircle, Loader2, ShieldAlert, Trash2, Bot, Share2} from "lucide-react";
-import { uploadDocumentAPI, fetchDocumentAPI } from "@/services/documentAPI";
+import { documentAPI } from "@/services/documentAPI";
 import { getAuthToken } from "@/services/authAPI";
 import { useRouter } from "next/router";
 import axios from "axios";
 import api from "@/services/APIclient";
 import { DocumentItem, DocumentCard } from "@/components/DocumentCard";
 import { ShareModal } from "@/components/ShareModal";
+import { useGooglePicker } from "@/hooks/useGooglePicker";
+import { useGoogleLogin } from "@react-oauth/google";
+import { FaGoogleDrive } from "react-icons/fa";
+
+interface GoogleDriveDocument {
+    id: string;
+    name: string; 
+    mimeType: string;
+    url: string;
+}
+
+interface PickerCallbackData {
+    action: string;
+    docs?: GoogleDriveDocument[];
+}
 
 export default function Dashboard(){
     const queryClient = useQueryClient();
@@ -26,6 +41,9 @@ export default function Dashboard(){
         setSelectedIds(prevIds => (prevIds.includes(id) ? prevIds.filter(prevId => prevId !== id): ([...prevIds, id])));
     })
 
+    const isPickerSdkReady = useGooglePicker();
+    const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
     const {data: token} = useQuery({
         queryKey: ["authToken"], 
         queryFn: getAuthToken,
@@ -36,11 +54,11 @@ export default function Dashboard(){
     // Use useQuery to manage documents data
     const { data: documents = [], isLoading: isDocsLoading, isError: isDocsError } = useQuery<DocumentItem[]>({
         queryKey: ["documents"],
-        queryFn: fetchDocumentAPI
+        queryFn: documentAPI["fetchDocumentAPI"],
     })
     // Use mutation to upload new files
     const uploadMutation = useMutation({
-        mutationFn: uploadDocumentAPI,
+        mutationFn: documentAPI["uploadDocumentAPI"],
         onSuccess: (data, variables) => {
             setUploadStatus({ type: "success", message: `Sucessfully uploaded "${variables.file.name}"` });
             queryClient.invalidateQueries({queryKey: ["documents"]});
@@ -112,13 +130,64 @@ export default function Dashboard(){
         if (selectedIds.length === 0) return; 
         const idsQuery = selectedIds.join(",");
         router.push(`/chat?document_ids=${idsQuery}&mode=multi`);
-    }
+    };
 
     const handleOpenShareModal = (doc: DocumentItem | null) => {
         const selectedDocs = (!doc) ? documents.filter(doc => selectedIds.includes(doc.id)) : [doc];
         setIsShareModalOpen(true);
         setSharingDocs(selectedDocs);
-    }
+    };
+
+    const openPicker = (access_token: string) => {
+        if (!window.google || !window.google.picker) return;
+        const view = new window.google.picker.View(window.google.picker.ViewId.DOCS);
+        const picker = new window.google.picker.PickerBuilder()
+            .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
+            .setDeveloperKey(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY || "")
+            .setAppId(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_APP_ID || "")
+            .setOAuthToken(access_token)
+            .addView(view)
+            .setCallback((data: PickerCallbackData) => {
+                if (data.action === window.google.picker.Action.PICKED && data.docs && data.docs.length > 0) {
+                    const doc = data.docs[0];
+                    setIsSyncing(true);
+
+                    documentAPI.uploadFromGoogleDrive(doc.id, access_token, doc.mimeType)
+                    .then(() => {
+                        alert(`Successfully synced "${doc.name}"`);
+                    })
+                    .catch(err => {
+                        alert(`Failed to sync "${doc.name}": ${err.message}`)
+                        console.error(`Failed to sync "${doc.name}": ${err.message}`);
+                    })
+                    .finally(() => {
+                        setIsSyncing(false);
+                    });
+                }
+            })
+            .build();
+        picker.setVisible(true);
+    };
+
+    const loginWithDrive = useGoogleLogin({
+        scope: 'https://www.googleapis.com/auth/drive.readonly',
+        flow: "implicit", 
+        onSuccess: (tokenResponse) => {
+            if(tokenResponse.access_token)
+                openPicker(tokenResponse.access_token);
+        }
+    });
+
+    const handleDriveButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation();
+
+        if (!isPickerSdkReady) {
+            alert("Google Picker SDK is not ready. Please try again later.");
+            return;
+        }
+
+        loginWithDrive();
+    };
 
     return (
         <div className = "min-h-screen bg-background text-foreground p-8 max-w-5xl mx-auto">
@@ -146,7 +215,29 @@ export default function Dashboard(){
                         <div>
                             <p className = "text-lg font-medium">Drag and drop files here, or click to select files</p>
                             <p className = "text-sm text-muted-foreground">Supported file types: .txt, .pdf, .docx, .pptx, .xlsx, .md, .html, .csv, .png, .jpeg, .jpg</p>
+
+                            <div className="relative flex py-2 items-center w-full max-w-xs justify-center mx-auto mb-4">
+                                <div className="grow border-t border-muted"></div>
+                                <span className="shrink mx-4 text-xs text-muted-foreground uppercase select-none">Or</span>
+                                <div className="grow border-t border-muted"></div>
+                            </div>
+
+                            {/* KHU VỰC NÚT BẤM GOOGLE DRIVE - Đã ép căn giữa */}
+                            <div className="w-full flex justify-center items-center">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={isSyncing}
+                                className="flex items-center gap-2 z-10 mx-auto"
+                                onClick={handleDriveButtonClick}
+                            >
+                                <FaGoogleDrive size={20} /> 
+                                {isSyncing ? "Syncing...." : "Download from Google Drive"}
+                            </Button>
+                            </div>
                         </div>
+
+                        
                     )}
                 </div>
             </div>

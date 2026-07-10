@@ -2,6 +2,18 @@ export {};
 
 declare global {
     interface Window {
-        google?: typeof google;
-    }
+    gapi: typeof gapi;
+    google: {
+        accounts: {
+            oauth2: {
+            initTokenClient: (config: {
+                client_id: string;
+                scope: string;
+                callback: (response: { access_token: string; error?: string }) => void;
+            }) => { requestAccessToken: (options?: { prompt?: string }) => void };
+            };
+        };
+        picker: typeof google.picker;
+        };
+  }
 }

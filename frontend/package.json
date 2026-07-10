@@ -36,6 +36,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/google.accounts": "^0.0.18",
+    "@types/google.picker": "^0.0.52",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
