@@ -19,8 +19,9 @@ router = APIRouter()
 def create_document_embedding(item: ChunkEmbeddingResponse, db: Session = Depends(get_db)):
     return document_service.save_chunks_embeddings(db, item)
 
+
 @router.post("/upload", response_model = DocumentResponse)
-def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user), conflict_strategy: str = "rename"):
     allowed_extensions = [".pdf", ".docx", ".txt", ".pptx", ".xlsx", ".csv", ".html", ".xls", ".md", ".png", ".jpg", ".jpeg"]
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in allowed_extensions:
@@ -29,7 +30,7 @@ def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(.
             detail = "Invalid file type. Only PDF, DOCX, TXT, PPTX, XLSX, CSV, HTML, XLS, MD, XLSX, JPG, JPEG, PNG files are allowed.")
     
     try:
-        return document_service.save_loaded_file(db, file, current_user.id, background_tasks)
+        return document_service.save_loaded_file(db, file, current_user.id, background_tasks, conflict_strategy)
     except Exception as e:
         print(f"An error occurred while saving the file: {str(e)}")
         raise HTTPException(
@@ -37,9 +38,17 @@ def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(.
             detail = f"An error occurred while saving the file: {str(e)}"
         )
     
-@router.get("/google-drive", response_model = DocumentResponse)
-def upload_document_from_google_drive(background_tasks: BackgroundTasks, file_id: str, access_token: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return document_service.save_google_drive_file(db, file_id, access_token, current_user.id, background_tasks)
+class GoogleDrivePayload(BaseModel):
+    file_id: str
+    access_token: str 
+    mime_type: str
+
+@router.post("/google-drive", response_model = DocumentResponse)
+def upload_document_from_google_drive(background_tasks: BackgroundTasks, payload: GoogleDrivePayload = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user), conflict_strategy: str = "rename"):
+    try: 
+        return document_service.save_google_drive_file(db, payload.file_id, payload.access_token, current_user.id, background_tasks, conflict_strategy)
+    except Exception as e:
+        raise HTTPException(status_code = status.HTTP_500_INTERNAL_SERVER_ERROR, detail = f"An error occurred while saving the file: {str(e)}")
     
 @router.get("/", response_model = List[DocumentResponse])
 def list_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

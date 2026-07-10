@@ -93,7 +93,8 @@ export default function Dashboard(){
 
         uploadMutation.mutate({
             file,
-            onProgress: (percent) => setUploadProgress(percent)
+            onProgress: (percent) => setUploadProgress(percent),
+            conflict_strategy: "rename"
         })
     }, [uploadMutation, token]);
 
@@ -157,8 +158,18 @@ export default function Dashboard(){
                         alert(`Successfully synced "${doc.name}"`);
                     })
                     .catch(err => {
-                        alert(`Failed to sync "${doc.name}": ${err.message}`)
-                        console.error(`Failed to sync "${doc.name}": ${err.message}`);
+                        if (err instanceof Error && err.name === 'AbortError'){
+                            console.warn("Upload aborted");
+                            return;
+                        }
+
+                        if (axios.isAxiosError(err) && err.response?.data) {
+                            const detail = err.response.data.detail || err.response.data.message || err.message;
+                            console.error(`Server error: ${detail}`);
+                            alert(`Failed to sync "${doc.name}": ${detail}`);
+                        } else {
+                            console.error(`Unknown error: ${err}`);
+                        }
                     })
                     .finally(() => {
                         setIsSyncing(false);

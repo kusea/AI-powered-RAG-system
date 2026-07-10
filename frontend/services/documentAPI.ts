@@ -13,13 +13,13 @@ export const documentAPI = {
             });
         return res.data;
     },
-    uploadDocumentAPI: async ({file, onProgress}: {file: File, onProgress: (progress: number) => void}) => {
+    uploadDocumentAPI: async ({file, onProgress, conflict_strategy = "rename"}: {file: File, onProgress: (progress: number) => void, conflict_strategy: string}) => {
         const formData = new FormData();
         formData.append("file", file);
 
         const token = localStorage.getItem("token"); // get token from local storage after user login
         try{
-            const res = await api.post("/documents/upload", formData, {
+            const res = await api.post(`/documents/upload?conflict_strategy=${conflict_strategy}`, formData, {
                 headers: {
                     "Content-Type": "multipart/form-data",
                     "Authorization": `Bearer ${token}`

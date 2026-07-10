@@ -300,7 +300,47 @@ def process_chunks_task(db_factory, document_id: int, file_path: str): # Run in 
 # Upload file
 UPLOAD_DIR = "storage"
 
-def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tasks):
+def process_conflict_same_title(background_tasks, db: Session, document: Document, user_id: int, filename: str, file_path: str, conflict_strategy: str):
+    if conflict_strategy == "skip":
+        if os.path.exists(file_path):
+            os.remove(file_path) # remove file (already temporarily stored) from storage
+        return {
+            "id": document.id,
+            "title": document.title,
+            "file_size": document.file_size,
+            "created_at": document.created_at,
+            "is_shared": False
+        }
+    else:
+        file_content = extract_full_text(file_path)
+
+        if document.file_path and os.path.exists(document.file_path):
+            try:
+                os.remove(document.file_path)
+            except Exception:
+                pass
+        
+        # Delete all chunks of the document
+        db.query(ChunkDocument).filter(ChunkDocument.document_id == document.id).delete()
+
+        # Update the document details
+        document.content = file_content
+        document.file_path = file_path
+        document.file_size = os.path.getsize(file_path)
+        document.created_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(document)
+        background_tasks.add_task(process_chunks_task, SessionLocal, document.id, file_path)
+
+        return {
+            "id": document.id,
+            "title": document.title,
+            "file_size": document.file_size,
+            "created_at": document.created_at,
+            "is_shared": False
+        }
+
+def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tasks, conflict_strategy: str = "rename"):
     user_dir = os.path.join(UPLOAD_DIR, str(user_id))
     os.makedirs(user_dir, exist_ok = True)
 
@@ -311,14 +351,24 @@ def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tas
     with open(file_path, "wb") as buffer: #Save file into storage
         copyfileobj(file.file, buffer)
 
-    document = db.query(Document).filter(Document.title == file.filename and Document.user_id == user_id).first()
+    document = db.query(Document).filter(Document.title == file.filename, Document.user_id == user_id, Document.deleted_at == None).first()
+
+    final_title = file.filename
+
     if document:
-        raise HTTPException(status_code=400, detail="Document with the same name already exists.")
+        if conflict_strategy in ["skip", "overwrite"]:
+            return process_conflict_same_title(background_tasks, db, document, user_id, file.filename, file_path, conflict_strategy)
+        elif conflict_strategy == "rename":
+            final_title = resolved_filename_conflict(db, user_id, file.filename)
+        else:
+            if os.path.exists(file_path):
+                os.remove(file_path) # remove file (already temporarily stored) from storage
+            raise HTTPException(status_code = 400, detail = "Document with the same name already exists.")
     
     file_content = extract_full_text(file_path)
     
     saved_documents = save_chunks_embeddings(db, ChunkEmbeddingCreate(
-        title=file.filename, 
+        title=final_title, 
         content=file_content,
         user_id=user_id, 
         file_path=file_path, 
@@ -359,38 +409,57 @@ def download_file_from_google_drive (file_id: str, access_token: str, user_id: i
     if not user_dir: 
         os.makedirs(user_dir, exist_ok = True)
 
-    file_extension = GOOGLE_MIME_TYPE_MAPPING[mime_type][1] if mime_type in GOOGLE_MIME_TYPE_MAPPING else os.path.splitext(original_filename)[1]
     # if mime_type is google_mime_type (google docx, google sheet, google pptx), then we need to use export_media
     # else we need to use get_media to download directly 
-    request = services.files().export_media(fileId = file_id, fields = "name, mimeType") if mime_type in GOOGLE_MIME_TYPE_MAPPING else services.files().get_media(fileId = file_id)
+    if mime_type in GOOGLE_MIME_TYPE_MAPPING:
+        mime_type, file_extension = GOOGLE_MIME_TYPE_MAPPING[mime_type]
+        request = services.files().export_media(fileId = file_id, mimeType = mime_type)
+    else: 
+        file_extension = os.path.splitext(original_filename)[1]
+        request = services.files().get_media(fileId = file_id)
 
+    fileIO = io.BytesIO()
+    downloader = MediaIoBaseDownload(fileIO, request)
+    done = False
+
+    while not done:
+        status, done = downloader.next_chunk()
+        print(f"Downloaded {int(status.progress() * 100)}%.")
+
+    fileIO.seek(0) # reset cursor to the beginning of the file
 
     file_name = str(uuid.uuid4()) + file_extension
 
     file_path = os.path.join(user_dir, file_name)
     with open(file_path, "wb") as buffer:
-        downloader = MediaIoBaseDownload(buffer, request)
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-            print(f"Downloaded {int(status.progress() * 100)}%.")
+        buffer.write(fileIO.read())
+        buffer.flush() # Force OS to push all data from cache to disk
+        
+    fileIO.close() # Free up memory
 
     return file_path, original_filename
 
-def save_google_drive_file(db: Session, file_id: str, access_token: str, user_id: int, background_tasks):
+def save_google_drive_file(db: Session, file_id: str, access_token: str, user_id: int, background_tasks, conflict_strategy: str = "rename"):
     file_path, original_filename = download_file_from_google_drive(file_id, access_token, user_id)
 
-    document = db.query(Document).filter(Document.title == original_filename and Document.user_id == user_id, Document.deleted_at == None).first()
+    document = db.query(Document).filter(Document.title == original_filename, Document.user_id == user_id, Document.deleted_at == None).first()
+
+    final_title = original_filename
 
     if document:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(status_code = 400, detail = "Document with the same name already exists.")
+        if conflict_strategy in ["skip", "overwrite"]:
+            return process_conflict_same_title(background_tasks, db, document, user_id, original_filename, file_path, conflict_strategy)
+        elif conflict_strategy == "rename":
+            final_title = resolved_filename_conflict(db, user_id, original_filename)
+        else:
+            if os.path.exists(file_path):
+                os.remove(file_path) # remove file (already temporarily stored) from storage
+            raise HTTPException(status_code = 400, detail = "Document with the same name already exists.")
     
     file_content = extract_full_text(file_path)
 
     saved_documents = save_chunks_embeddings(db, ChunkEmbeddingCreate(
-        title = original_filename,
+        title = final_title,
         content = file_content,
         file_path = file_path,
         file_size = os.path.getsize(file_path),
@@ -587,3 +656,13 @@ def get_shared_document(db: Session, user_id: int, filter_condition):
         "shared_at": dict["shared_at"]
     } for dict, email_share_by, email_share_to in zip(raw_dict, list_email_share_by, list_email_share_to)]
     
+def resolved_filename_conflict(db: Session, user_id: int, original_title: str):
+    base, extension = os.path.splitext(original_title)
+    counter = 1
+    new_title = original_title
+
+    while db.query(Document).filter(Document.title == new_title, Document.user_id == user_id, Document.deleted_at == None).first():
+        new_title = f"{base}_({counter}){extension}"
+        counter += 1
+
+    return new_title

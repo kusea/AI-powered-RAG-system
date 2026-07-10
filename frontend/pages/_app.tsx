@@ -16,7 +16,7 @@ export default function App({ Component, pageProps }: AppProps) {
         defaultOptions: {
             queries: {
                 refetchOnWindowFocus: false, // disable unnecessary refetch when switch tab
-                retry: 1
+                retry: false,
             }
         }}
     ));
