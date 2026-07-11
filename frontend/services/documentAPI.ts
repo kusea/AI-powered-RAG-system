@@ -13,7 +13,7 @@ export const documentAPI = {
             });
         return res.data;
     },
-    uploadDocumentAPI: async ({file, onProgress, conflict_strategy = "rename"}: {file: File, onProgress: (progress: number) => void, conflict_strategy: string}) => {
+    uploadDocumentAPI: async ({file, onProgress, conflict_strategy = "rename"}: {file: File, onProgress: (progress: number) => void, conflict_strategy?: string}) => {
         const formData = new FormData();
         formData.append("file", file);
 
@@ -36,8 +36,8 @@ export const documentAPI = {
             console.error("Error uploading file:", err);
         }
     },
-    uploadFromGoogleDrive: async (fileId: string, accessToken: string, mimeType: string) => {
-        const res = await api.post("/documents/google-drive", {file_id: fileId, access_token: accessToken, mime_type: mimeType});
+    uploadFromGoogleDrive: async ({fileId, accessToken, mimeType, conflict_strategy = "rename"} : {fileId: string, accessToken: string, mimeType: string, conflict_strategy?: string}) => {
+        const res = await api.post(`/documents/google-drive?conflict_strategy=${conflict_strategy}`, {file_id: fileId, access_token: accessToken, mime_type: mimeType});
         return res.data;
     },
 }

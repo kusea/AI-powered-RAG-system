@@ -13,6 +13,7 @@ import { ShareModal } from "@/components/ShareModal";
 import { useGooglePicker } from "@/hooks/useGooglePicker";
 import { useGoogleLogin } from "@react-oauth/google";
 import { FaGoogleDrive } from "react-icons/fa";
+import { FileConflictModal } from "@/components/FileConflictModal";
 
 interface GoogleDriveDocument {
     id: string;
@@ -36,13 +37,17 @@ export default function Dashboard(){
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [sharingDocs, setSharingDocs] = useState<DocumentItem[]>([]);
 
+    const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+    const [conflictType, setConflictType] = useState<"local" | "google-drive" | null>(null);
+    const [pendingLocalFile, setPendingLocalFile] = useState<File | null>(null);
+    const [pendingDriveFile, setPendingDriveFile] = useState<{fileId: string, accessToken: string, mimeType: string, conflict_strategy: string, filename: string} | null>(null);
+
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const handleToggleSelect = ((id: number) => {
         setSelectedIds(prevIds => (prevIds.includes(id) ? prevIds.filter(prevId => prevId !== id): ([...prevIds, id])));
     })
 
     const isPickerSdkReady = useGooglePicker();
-    const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
     const {data: token} = useQuery({
         queryKey: ["authToken"], 
@@ -54,11 +59,11 @@ export default function Dashboard(){
     // Use useQuery to manage documents data
     const { data: documents = [], isLoading: isDocsLoading, isError: isDocsError } = useQuery<DocumentItem[]>({
         queryKey: ["documents"],
-        queryFn: documentAPI["fetchDocumentAPI"],
+        queryFn: documentAPI.fetchDocumentAPI,
     })
     // Use mutation to upload new files
     const uploadMutation = useMutation({
-        mutationFn: documentAPI["uploadDocumentAPI"],
+        mutationFn: documentAPI.uploadDocumentAPI,
         onSuccess: (data, variables) => {
             setUploadStatus({ type: "success", message: `Sucessfully uploaded "${variables.file.name}"` });
             queryClient.invalidateQueries({queryKey: ["documents"]});
@@ -77,6 +82,35 @@ export default function Dashboard(){
         }
     })
 
+    const resetUploadState = () => {
+        setTimeout(() => setUploadProgress(null), 1500);
+        setPendingLocalFile(null);
+        setPendingDriveFile(null);
+        setUploadStatus(null);
+    }
+
+    const driveUploadMutation = useMutation({
+        mutationFn: documentAPI.uploadFromGoogleDrive,
+        onSuccess: () => {
+            setUploadProgress(100);
+            setUploadStatus({ type: "success", message: "Nhập tài liệu từ Google Drive thành công!" });
+            queryClient.invalidateQueries({ queryKey: ["documents"] });
+            resetUploadState();
+        },
+        onError: (error) => {
+            let message: string = "";
+            if (axios.isAxiosError(error)) {
+                const status = error.response?.status;
+                if (status === 429) message = "Rate limit exceeded. Please try again later.";
+                else message = `An error occurred while uploading "${error.response?.data.message || error.message}".`;
+            } else if (error instanceof Error) message = `An error occurred while uploading (not Axios) "${error.message}".`;
+            else message = "An unknown error occurred.";
+            setUploadStatus({ type: "error", message: message });
+            setUploadProgress(null);
+            resetUploadState();
+        }
+    });
+
     // Solving the drop files logic
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
         if (acceptedFiles.length === 0) return;
@@ -88,6 +122,13 @@ export default function Dashboard(){
         }
 
         const file = acceptedFiles[0];
+        const isDuplicate = documents.some(doc => doc.title === file.name);
+
+        if (isDuplicate) {
+            setPendingLocalFile(file);
+            setConflictType("local");
+            setIsConflictModalOpen(true);
+        } 
         setUploadProgress(0);
         setUploadStatus(null);
 
@@ -96,7 +137,7 @@ export default function Dashboard(){
             onProgress: (percent) => setUploadProgress(percent),
             conflict_strategy: "rename"
         })
-    }, [uploadMutation, token]);
+    }, [uploadMutation, token, documents]);
 
     // useDropzone
     const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
@@ -139,6 +180,29 @@ export default function Dashboard(){
         setSharingDocs(selectedDocs);
     };
 
+    const handlePickerCallback = useCallback((data: PickerCallbackData, accessToken: string) => {
+        if (data.action === window.google.picker.Action.PICKED && data.docs && data.docs.length > 0) {
+            const doc = data.docs[0];
+
+            const isDuplicate = documents.some(document => document.title === doc.name);
+
+            if (isDuplicate) {
+                setPendingDriveFile({fileId: doc.id, accessToken, mimeType: doc.mimeType, conflict_strategy: "rename", filename: doc.name});
+                setConflictType("google-drive");
+                setIsConflictModalOpen(true);
+            }
+            setUploadProgress(0);
+            setUploadStatus(null);
+
+            driveUploadMutation.mutate({
+                fileId: doc.id,
+                accessToken,
+                mimeType: doc.mimeType,
+                conflict_strategy: "rename"
+            });
+        }
+    }, [documents, driveUploadMutation]);
+
     const openPicker = (access_token: string) => {
         if (!window.google || !window.google.picker) return;
         const view = new window.google.picker.View(window.google.picker.ViewId.DOCS);
@@ -149,32 +213,7 @@ export default function Dashboard(){
             .setOAuthToken(access_token)
             .addView(view)
             .setCallback((data: PickerCallbackData) => {
-                if (data.action === window.google.picker.Action.PICKED && data.docs && data.docs.length > 0) {
-                    const doc = data.docs[0];
-                    setIsSyncing(true);
-
-                    documentAPI.uploadFromGoogleDrive(doc.id, access_token, doc.mimeType)
-                    .then(() => {
-                        alert(`Successfully synced "${doc.name}"`);
-                    })
-                    .catch(err => {
-                        if (err instanceof Error && err.name === 'AbortError'){
-                            console.warn("Upload aborted");
-                            return;
-                        }
-
-                        if (axios.isAxiosError(err) && err.response?.data) {
-                            const detail = err.response.data.detail || err.response.data.message || err.message;
-                            console.error(`Server error: ${detail}`);
-                            alert(`Failed to sync "${doc.name}": ${detail}`);
-                        } else {
-                            console.error(`Unknown error: ${err}`);
-                        }
-                    })
-                    .finally(() => {
-                        setIsSyncing(false);
-                    });
-                }
+                handlePickerCallback(data, access_token);
             })
             .build();
         picker.setVisible(true);
@@ -188,6 +227,31 @@ export default function Dashboard(){
                 openPicker(tokenResponse.access_token);
         }
     });
+
+    const handleResolveConflict = (strat: "overwrite" | "rename" | "skip") => {
+        setIsConflictModalOpen(false);
+
+        if (conflictType === "local" && pendingLocalFile) 
+            uploadMutation.mutate({
+                file: pendingLocalFile, 
+                onProgress: (percent) => setUploadProgress(percent),
+                conflict_strategy: strat
+            })
+        else if (conflictType === "google-drive" && pendingDriveFile)
+            driveUploadMutation.mutate({
+                fileId: pendingDriveFile.fileId,
+                accessToken: pendingDriveFile.accessToken,
+                mimeType: pendingDriveFile.mimeType,
+                conflict_strategy: strat
+            })
+    }
+
+    const handleCancelConflict = () => {
+        setIsConflictModalOpen(false);
+        resetUploadState();
+    }
+
+    const isUploading = uploadMutation.isPending || driveUploadMutation.isPending;
 
     const handleDriveButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         e.stopPropagation();
@@ -235,16 +299,16 @@ export default function Dashboard(){
 
                             {/* KHU VỰC NÚT BẤM GOOGLE DRIVE - Đã ép căn giữa */}
                             <div className="w-full flex justify-center items-center">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                disabled={isSyncing}
-                                className="flex items-center gap-2 z-10 mx-auto"
-                                onClick={handleDriveButtonClick}
-                            >
-                                <FaGoogleDrive size={20} /> 
-                                {isSyncing ? "Syncing...." : "Download from Google Drive"}
-                            </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={isUploading}
+                                    className="flex items-center gap-2 z-10 mx-auto"
+                                    onClick={handleDriveButtonClick}
+                                >
+                                    <FaGoogleDrive size={20} /> 
+                                    {isUploading ? "Loading to download document from Google Drive...." : "Download from Google Drive"}
+                                </Button>
                             </div>
                         </div>
 
@@ -365,6 +429,14 @@ export default function Dashboard(){
                 sharingDocs={sharingDocs} 
                 onSelectedIds={setSelectedIds} 
             />)}
+
+            {isConflictModalOpen &&
+            <FileConflictModal
+                isOpen={isConflictModalOpen}
+                fileName={conflictType === "local" ? pendingLocalFile?.name || "" : pendingDriveFile?.filename || ""}
+                onResolve={handleResolveConflict}
+                onCancel={handleCancelConflict}
+            />}
     </div>
     );
 }

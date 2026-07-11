@@ -92,6 +92,13 @@ def shared_to_me(db: Session = Depends(get_db), current_user: User = Depends(get
 def get_trash_document(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return document_service.get_trash_document(db, current_user.id)
 
+class PermanentDeleteDocPayload(BaseModel):
+    document_ids: List[int]
+
+@router.delete("/permanent-delete-document", status_code = status.HTTP_200_OK)
+def permanent_delete_document(payload: PermanentDeleteDocPayload = Body(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return document_service.permanent_delete_document(db, payload.document_ids, current_user.id)
+
 @router.get("/all", status_code = status.HTTP_200_OK)
 def get_all_documents(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     own_docs = db.query(Document).filter(Document.user_id == current_user.id, Document.deleted_at == None).all()

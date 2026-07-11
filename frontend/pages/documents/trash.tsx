@@ -22,7 +22,7 @@ export default function DocumentTrash() {
             const res = await api.get("/documents/trash");
             return res.data;
         },
-        staleTime: 0
+        staleTime: Infinity
     })
 
     const handleToggleSelect = ((id: number) => {

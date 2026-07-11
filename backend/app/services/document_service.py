@@ -519,19 +519,37 @@ def delete_document(db: Session, document_ids: list[int], user_id: int):
     return {"message": "Move document to trash successfully!!!"}
 
 def get_trash_document(db: Session, user_id: int):
-    share_doc_table = db.query(Document).join(DocumentShare)
-    exist_stmt = share_doc_table.exists()
-    is_exist = db.query(exist_stmt).scalar()
-
-    if is_exist:
-        return share_doc_table.filter(
+    return db.query(Document).outerjoin(DocumentShare, Document.id == DocumentShare.document_id)\
+        .filter(
+            Document.deleted_at != None,
             or_(
-                DocumentShare.shared_to_id == user_id, 
-                Document.user_id == user_id
-            ),
-            Document.deleted_at != None
-        ).all()
-    return db.query(Document).filter(Document.user_id == user_id, Document.deleted_at != None).all()
+                Document.user_id == user_id,
+                DocumentShare.shared_to_id == user_id
+            )
+        )\
+        .distinct().all()
+
+def permanent_delete_document(db: Session, document_ids: list[int], user_id: int):
+    docs = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == user_id, Document.deleted_at != None).all()
+
+    if not docs:
+        raise HTTPException(status_code=404, detail="Document not found in your account's trash.")
+    
+    for doc in docs:
+        if os.path.exists(doc.file_path):
+            try:
+                os.remove(doc.file_path) # remove file (already temporarily stored) from storage
+            except Exception as e:
+                print(f"Error during permanent delete document {doc.id}: {str(e)}")
+
+        db.query(ChunkDocument).filter(ChunkDocument.document_id == doc.id).delete()
+        db.query(DocumentShare).filter(DocumentShare.document_id == doc.id).delete()
+        db.query(DocumentInsight).filter(DocumentInsight.document_id == doc.id).delete()
+
+        db.delete(doc)
+    
+    db.commit()
+    return {"message": "Delete document and relevant data has been deleted permanently!!!"}
 
 def restore_document(db: Session, document_ids: list[int], user_id: int):
     docs = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == user_id, Document.deleted_at != None)
@@ -661,7 +679,7 @@ def resolved_filename_conflict(db: Session, user_id: int, original_title: str):
     counter = 1
     new_title = original_title
 
-    while db.query(Document).filter(Document.title == new_title, Document.user_id == user_id, Document.deleted_at == None).first():
+    while db.query(Document).filter(Document.title == new_title, Document.user_id == user_id).first():
         new_title = f"{base}_({counter}){extension}"
         counter += 1
 
