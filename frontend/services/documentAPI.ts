@@ -40,6 +40,10 @@ export const documentAPI = {
         const res = await api.post(`/documents/google-drive?conflict_strategy=${conflict_strategy}`, {file_id: fileId, access_token: accessToken, mime_type: mimeType});
         return res.data;
     },
+    permanentDeleteDocument: async (ids: number[]) => {
+        const res = await api.delete("/documents/permanent-delete-document", {data: {document_ids: ids}});
+        return res.data;
+    }
 }
 // Solve the case if user's token is expired
 axios.interceptors.response.use((response) => response, (error) => {

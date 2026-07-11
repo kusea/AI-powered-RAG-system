@@ -1,9 +1,10 @@
 import React, { useState} from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, ArrowLeft, RefreshCw, Loader2} from "lucide-react";
+import { FileText, ArrowLeft, RefreshCw, Loader2, Trash} from "lucide-react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/router";
 import api from "@/services/APIclient";
+import { documentAPI } from "@/services/documentAPI";
 
 interface TrashDocumentItem {
     id: number;
@@ -41,6 +42,16 @@ export default function DocumentTrash() {
             alert(`Failed to restore documents: ${error.message}`);
         }
     });
+
+    const permanentDeleteMutation = useMutation({
+        mutationFn: (ids: number[]) => documentAPI.permanentDeleteDocument(ids),
+        onSuccess: () => {
+            alert(`Successfully permanently deleted ${trashDocs?.length === 1 ? "this document" : "these documents"}`);
+            queryClient.invalidateQueries({queryKey: ["trashDocuments"]});
+            setSelectedIds([]);
+        },
+        onError: (err) => alert(`Failed to permanently delete documents. ${err.message}`)
+    })
 
     const handleRestoreDocuments = async (idsRestore: number[]) => {
         if (idsRestore.length === 0) return;
@@ -134,6 +145,20 @@ export default function DocumentTrash() {
                                                 >
                                                     <RefreshCw className="w-3.5 h-3.5" />
                                                     Restore
+                                                </Button>
+
+                                                <Button 
+                                                    variant = "outline"
+                                                    size = "sm"
+                                                    onClick = {() =>{
+                                                        if (confirm("Are you sure you want to permanently delete this document? Cannot be redo.")) {
+                                                            permanentDeleteMutation.mutate([doc.id]);
+                                                        }
+                                                    }}
+                                                    className = "text-destructive hover:bg-destructive/10 h-8 px-2.5"
+                                                >
+                                                    <Trash className="w-3.5 h-3.5" />
+                                                    Delete completely.
                                                 </Button>
                                             </td>
                                         </tr>
