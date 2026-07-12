@@ -1,8 +1,8 @@
 // frontend/pages/documents/[id].tsx
 import { useRouter } from "next/router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { FileText, ArrowLeft, MessageSquare, Calendar, HardDrive, Share2 } from "lucide-react";
+import { FileText, ArrowLeft, MessageSquare, Calendar, HardDrive, Share2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import api from "@/services/APIclient";
 import { Insights } from "@/components/DocumentCard";
@@ -11,6 +11,7 @@ import { DocumentView } from "@/components/views/DocumentView";
 // Hàm gọi API lấy chi tiết 1 tài liệu dựa trên ID
 export default function DocumentDetail() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const { id } = router.query;
 
     const {data: documentInsights} = useQuery<Insights>({
@@ -31,6 +32,20 @@ export default function DocumentDetail() {
         enabled: router.isReady && !!id, // Chỉ gọi API khi ID đã tồn tại trên URL
     });
     console.log("DOCUMENT: ", doc);
+
+    const handleDeleteToTrash = async () => {
+        if (!id) return;
+
+        if (!confirm("Are you sure you want to delete this document?")) return;
+        try {
+            await api.delete("/documents/delete-document", { data: { document_ids: [id] } }).then(() => {
+                queryClient.invalidateQueries({ queryKey: ["documents"] });
+                router.push("/dashboard");
+            });
+        } catch (error){
+            console.error("Error deleting document", error);
+        }
+    }
 
     const formatFileSize = (bytes: number | null) => {
         if (!bytes) return "0 Bytes";
@@ -64,6 +79,13 @@ export default function DocumentDetail() {
                             <MessageSquare className="h-4 w-4" /> Ask AI Assistant
                         </Button>
                     </Link>
+
+                    <div className = "flex items-center gap-3">
+                        <Button variant="destructive" onClick={handleDeleteToTrash}>
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                        </Button>
+                    </div>
                 </div>
             </div>
 

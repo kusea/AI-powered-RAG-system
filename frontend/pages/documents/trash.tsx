@@ -60,6 +60,13 @@ export default function DocumentTrash() {
         restoreMutation.mutate(idsRestore);
     }
 
+    const handlePermanentDeleteDocuments = async (ids: number[]) => {
+        if (ids.length === 0) return;
+        if (!confirm(`Are you sure you want to permanently delete ${ids.length === 1 ? "this document" : "these documents"}?`)) return;
+        
+        permanentDeleteMutation.mutate(ids);
+    }
+
     return (
         <div className = "min-h-screen bg-background flex flex-col">
             <main className="flex-1 p-8 max-w-5xl w-full mx-auto">
@@ -74,12 +81,26 @@ export default function DocumentTrash() {
 
                     {/* Bulk restore */}
                     {selectedIds.length > 0 && (
-                        <Button 
-                            onClick={() => handleRestoreDocuments(selectedIds)} 
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                        >
-                            <RefreshCw className="h-4 w-4" /> Restore {selectedIds.length} selected document{selectedIds.length > 1 && "s"}
-                        </Button>
+                        <div>
+                            <div className="flex items-center space-x-3">
+                                <Button 
+                                    onClick={() => handleRestoreDocuments(selectedIds)} 
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                                    variant = "outline"
+                                    disabled = {restoreMutation.isPending || permanentDeleteMutation.isPending}
+                                >
+                                    <RefreshCw className="h-4 w-4" /> Restore {selectedIds.length} selected document{selectedIds.length > 1 && "s"}
+                                </Button>
+                                <Button 
+                                    onClick={() => handlePermanentDeleteDocuments(selectedIds)} 
+                                    className="bg-destructive hover:bg-destructive/90 text-white gap-2"
+                                    variant = "destructive"
+                                    disabled = {restoreMutation.isPending || permanentDeleteMutation.isPending}
+                                >
+                                    <Trash className="h-4 w-4" /> Delete {selectedIds.length} selected document{selectedIds.length > 1 && "s"}
+                                </Button>
+                            </div>
+                        </div>
                     )}
                 </div>
 
@@ -104,7 +125,7 @@ export default function DocumentTrash() {
                                     <th className="p-4 w-12 text-center">
                                         <input 
                                             type="checkbox"
-                                            title="Chọn tất cả"
+                                            title="Select all"
                                             checked={selectedIds.length === trashDocs.length}
                                             onChange={() => setSelectedIds(selectedIds.length === trashDocs.length ? [] : trashDocs.map(d => d.id))}
                                             className="h-4 w-4 accent-primary cursor-pointer"
@@ -150,11 +171,7 @@ export default function DocumentTrash() {
                                                 <Button 
                                                     variant = "outline"
                                                     size = "sm"
-                                                    onClick = {() =>{
-                                                        if (confirm("Are you sure you want to permanently delete this document? Cannot be redo.")) {
-                                                            permanentDeleteMutation.mutate([doc.id]);
-                                                        }
-                                                    }}
+                                                    onClick = {() => handlePermanentDeleteDocuments([doc.id])}
                                                     className = "text-destructive hover:bg-destructive/10 h-8 px-2.5"
                                                 >
                                                     <Trash className="w-3.5 h-3.5" />

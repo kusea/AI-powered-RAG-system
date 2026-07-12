@@ -3,6 +3,7 @@ import { ImageView } from "./ImageVíew";
 import { PdfView } from "./PdfView";
 import { TextView } from "./TextView";
 import { ExcelViewer } from "./ExcelViewer";
+import { DocxViewer } from "./DocxView";
 
 interface DocumentViewerProps {
     fileUrl: string;    // Đường dẫn để tải/đọc file từ backend storage
@@ -12,6 +13,7 @@ interface DocumentViewerProps {
 
 export const DocumentView: React.FC<DocumentViewerProps> = ({fileUrl, fileName, textContent,}) => {
     const extension = useMemo(() => fileName.split(".").pop()?.toLowerCase(), [fileName]);
+    console.log(`Extension: ${extension}`);
     const formatImageUrl = (url: string) => {
             if (!url) return "/";
             let cleanURL = url.replace(/\\/g, "/");
@@ -24,8 +26,11 @@ export const DocumentView: React.FC<DocumentViewerProps> = ({fileUrl, fileName, 
     const formattedUrl = formatImageUrl(fileUrl);
     switch (extension) {
         case "xlsx":
+        case ".xlsx":
         case "xls":
+        case ".xls":
         case "csv":
+        case ".csv":
         return <ExcelViewer fileUrl={formattedUrl} textContent={textContent} />;
         
         case "png":
@@ -38,6 +43,9 @@ export const DocumentView: React.FC<DocumentViewerProps> = ({fileUrl, fileName, 
         case "pdf":
         return <PdfView fileUrl={formattedUrl} />;
         
+        case "docx":
+        return <DocxViewer textContent={textContent} />;
+
         default:
         // Các file văn bản thô như .txt, .md hoặc fall-back text từ .docx
         return <TextView content={textContent} extension={extension} />;

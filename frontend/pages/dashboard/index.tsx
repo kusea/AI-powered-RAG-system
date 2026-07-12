@@ -17,9 +17,9 @@ import { FileConflictModal } from "@/components/FileConflictModal";
 
 interface GoogleDriveDocument {
     id: string;
-    name: string; 
-    mimeType: string;
-    url: string;
+    name?: string; 
+    mimeType?: string;
+    url?: string;
 }
 
 interface PickerCallbackData {
@@ -128,15 +128,15 @@ export default function Dashboard(){
             setPendingLocalFile(file);
             setConflictType("local");
             setIsConflictModalOpen(true);
-        } 
+        } else {
+            uploadMutation.mutate({
+                file,
+                onProgress: (percent) => setUploadProgress(percent),
+                conflict_strategy: "rename"
+            })
+        }
         setUploadProgress(0);
         setUploadStatus(null);
-
-        uploadMutation.mutate({
-            file,
-            onProgress: (percent) => setUploadProgress(percent),
-            conflict_strategy: "rename"
-        })
     }, [uploadMutation, token, documents]);
 
     // useDropzone
@@ -187,25 +187,25 @@ export default function Dashboard(){
             const isDuplicate = documents.some(document => document.title === doc.name);
 
             if (isDuplicate) {
-                setPendingDriveFile({fileId: doc.id, accessToken, mimeType: doc.mimeType, conflict_strategy: "rename", filename: doc.name});
+                setPendingDriveFile({fileId: doc.id, accessToken, mimeType: doc.mimeType || "", conflict_strategy: "rename", filename: doc.name || ""});
                 setConflictType("google-drive");
                 setIsConflictModalOpen(true);
+            } else {
+                driveUploadMutation.mutate({
+                    fileId: doc.id,
+                    accessToken,
+                    mimeType: doc.mimeType || "",
+                    conflict_strategy: "rename"
+                });
             }
             setUploadProgress(0);
             setUploadStatus(null);
-
-            driveUploadMutation.mutate({
-                fileId: doc.id,
-                accessToken,
-                mimeType: doc.mimeType,
-                conflict_strategy: "rename"
-            });
         }
     }, [documents, driveUploadMutation]);
 
     const openPicker = (access_token: string) => {
         if (!window.google || !window.google.picker) return;
-        const view = new window.google.picker.View(window.google.picker.ViewId.DOCS);
+        const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCS);
         const picker = new window.google.picker.PickerBuilder()
             .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
             .setDeveloperKey(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_API_KEY || "")

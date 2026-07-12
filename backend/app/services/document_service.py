@@ -351,7 +351,7 @@ def save_loaded_file(db: Session, file: UploadFile, user_id: int, background_tas
     with open(file_path, "wb") as buffer: #Save file into storage
         copyfileobj(file.file, buffer)
 
-    document = db.query(Document).filter(Document.title == file.filename, Document.user_id == user_id, Document.deleted_at == None).first()
+    document = db.query(Document).filter(Document.title == file.filename, Document.user_id == user_id).first()
 
     final_title = file.filename
 
@@ -428,6 +428,7 @@ def download_file_from_google_drive (file_id: str, access_token: str, user_id: i
 
     fileIO.seek(0) # reset cursor to the beginning of the file
 
+    file_extension = file_extension if not file_extension or file_extension.startswith(".") else f".{file_extension}"
     file_name = str(uuid.uuid4()) + file_extension
 
     file_path = os.path.join(user_dir, file_name)
@@ -442,7 +443,7 @@ def download_file_from_google_drive (file_id: str, access_token: str, user_id: i
 def save_google_drive_file(db: Session, file_id: str, access_token: str, user_id: int, background_tasks, conflict_strategy: str = "rename"):
     file_path, original_filename = download_file_from_google_drive(file_id, access_token, user_id)
 
-    document = db.query(Document).filter(Document.title == original_filename, Document.user_id == user_id, Document.deleted_at == None).first()
+    document = db.query(Document).filter(Document.title == original_filename, Document.user_id == user_id).first()
 
     final_title = original_filename
 
