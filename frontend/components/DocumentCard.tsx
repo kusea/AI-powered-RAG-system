@@ -62,15 +62,21 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({ doc, isSelected, onS
                     />
                 </div>
 
-                
-                <div className = "flex items-center space-x-4 min-w-0 p-4 left-2 justify-between gap-4">
-                    <div className = "p-2.5 bg-primary/10 rounded-lg">
-                        <FileText className = "h-5 w-5" />
+                <div className="flex items-center space-x-4 min-w-0 p-4 left-2 justify-between gap-4">
+                    <div className={`p-2.5 rounded-lg ${doc.is_shared ? "bg-blue-500/10 text-blue-500" : "bg-primary/10 text-primary"}`}>
+                        {doc.is_shared ? <Share2 className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
                     </div>
                     <div className="min-w-0">
-                        <p className="font-medium text-sm truncate max-w-md md:max-w-xl">{doc.title}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm truncate max-w-xs md:max-w-md">{doc.title}</p>
+                                {doc.is_shared && (
+                                    <span className="text-[10px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 shadow-xs">
+                                        Shared
+                                    </span>
+                                )}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                        Size: {formatBytes(doc.file_size)} • Uploaded: {new Date(doc.created_at).toLocaleDateString("vi-VN")}
+                            Size: {formatBytes(doc.file_size)} {doc.is_shared ? ` • Sender: ${doc.owner_email}` : "Me"} • Uploaded: {new Date(doc.created_at).toLocaleDateString("vi-VN")}
                         </p>
                     </div>
                 </div>

@@ -1,68 +1,107 @@
-import React from "react";
-import { FileText } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { FileText, AlertCircle } from "lucide-react";
 
 interface DocxViewerProps {
-    textContent: string;
+    textContent?: string;
+    fileUrl?: string; 
 }
 
-export const DocxViewer: React.FC<DocxViewerProps> = ({ textContent }) => {
-    if (!textContent || textContent.trim() === "") {
+export const DocxViewer: React.FC<DocxViewerProps> = ({ textContent, fileUrl }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [loading, setLoading] = useState(!!fileUrl);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const renderFile = async () => {
+            if (!fileUrl) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                setLoading(true);
+                setError(null);
+                
+                const docx = await import("docx-preview");
+                
+                const response = await fetch(fileUrl);
+                if (!response.ok) throw new Error("Can not fetch DOCX document.");
+                
+                const arrayBuffer = await response.arrayBuffer();
+                
+                if (containerRef.current) {
+                    containerRef.current.innerHTML = ""; // Clear previous content
+                    await docx.renderAsync(arrayBuffer, containerRef.current, undefined, {
+                        className: "docx-render-content",
+                        inWrapper: false,
+                        ignoreWidth: false,
+                        ignoreHeight: false,
+                    });
+                }
+            } catch (err) {
+                console.error("Error rendering DOCX:", err);
+                setError("Error rendering DOCX. Trying to render as plain text.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        renderFile();
+    }, [fileUrl]);
+
+    if (loading) {
         return (
-        <div className="p-8 text-center text-xs text-muted-foreground bg-muted/10 border border-dashed rounded-xl">
-            <p className="text-muted-foreground">This document is empty or the content is not available.</p>
-        </div>
+            <div className="p-8 text-center text-xs text-muted-foreground bg-muted/10 border border-dashed rounded-xl">
+                <p className="text-muted-foreground">Loading...</p>
+            </div>
         );
     }
 
-    const paragraphs = textContent
-        .split("\n")
-        .map((p) => p.trim());
+    if (error || !fileUrl) {
+        const paragraphs = textContent ? textContent.split("\n").map((p) => p.trim()) : [];
+        if (paragraphs.length === 0) {
+            return (
+                <div className="p-8 text-center text-xs text-muted-foreground bg-muted/10 border border-dashed rounded-xl">
+                    <p>This document is empty or the content is not available.</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm w-full max-w-4xl mx-auto">
+                {error && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-[11px] text-amber-600">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        <span>{error}</span>
+                    </div>
+                )}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-blue-600/10 border-b text-xs font-medium text-blue-600">
+                    <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        <span>Docx Reader</span>
+                    </div>
+                </div>
+                <div className="p-6 bg-background text-foreground text-xs text-justify space-y-3 max-h-150 overflow-auto">
+                    {paragraphs.map((para, i) => para ? <p key={i}>{para}</p> : <div key={i} className="h-2" />)}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm w-full max-w-4xl mx-auto">
             <div className="flex items-center justify-between px-4 py-2.5 bg-blue-600/10 border-b text-xs font-medium text-blue-600">
                 <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    <span>Docx Reader</span>
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                    {paragraphs.filter(p => p.length > 0).length} {paragraphs.filter(p => p.length > 0).length === 1 ? "paragraph" : "paragraphs"} • {textContent.length.toLocaleString()} {textContent.length === 1 ? "character" : "characters"}
+                    <span>Docx Advanced Viewer</span>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-auto max-h-170 p-4 md:p-8 bg-zinc-100 dark:bg-zinc-900/50 flex justify-center">
-                <div className="w-full max-w-200 min-h-125 bg-background text-foreground shadow-md border rounded-md p-6 md:p-12 font-sans selection:bg-blue-500/20">
-                    <div className="prose prose-sm max-w-none dark:prose-invert space-y-4">
-                        {paragraphs.map((para, index) => {
-                            if (para.length === 0) {
-                                return <div key={index} className="h-2" />;
-                            }
-
-                            const isPotentialHeading = para.length < 100 && (
-                                para.startsWith("Chapter") || 
-                                para.startsWith("Section") || 
-                                /^[0-9]\./.test(para) || 
-                                para === para.toUpperCase() && para.length > 5 && !/[a-z]/.test(para)
-                            );
-
-                            if (isPotentialHeading) {
-                                return (
-                                <h3 key={index} className="text-base font-bold text-foreground mt-4 mb-2 border-b border-muted pb-1 leading-tight">
-                                    {para}
-                                </h3>
-                                );
-                            }
-
-                            // Mặc định render đoạn văn chuẩn Microsoft Word (Căn đều 2 bên - justify)
-                            return (
-                                <p key={index} className="text-xs text-muted-foreground leading-relaxed text-justify indent-0 tracking-wide">
-                                {para}
-                                </p>
-                            );
-                            })
-                        }
-                    </div>
-                </div>
+            <div className="flex-1 overflow-auto max-h-170 p-4 md:p-8 bg-zinc-100 dark:bg-zinc-900/50 flex justify-center dynamic-docx-container">
+                <div 
+                    ref={containerRef} 
+                    className="w-full bg-background text-foreground shadow-md border rounded-md p-6 md:p-12 font-sans overflow-x-auto selection:bg-blue-500/20"
+                />
             </div>
         </div>
     );

@@ -52,10 +52,20 @@ export default function Dashboard(){
     const {data: token} = useQuery({
         queryKey: ["authToken"], 
         queryFn: getAuthToken,
-        staleTime: 0
+        staleTime: 30000
     });
 
     const isHasToken = !!token;
+
+    const resetUploadState = () => {
+        setTimeout(() => {
+            setUploadProgress(null);
+        }, 1000);
+        
+        setPendingLocalFile(null);
+        setPendingDriveFile(null);
+        setUploadStatus(null);
+    }
     // Use useQuery to manage documents data
     const { data: documents = [], isLoading: isDocsLoading, isError: isDocsError } = useQuery<DocumentItem[]>({
         queryKey: ["documents"],
@@ -67,7 +77,7 @@ export default function Dashboard(){
         onSuccess: (data, variables) => {
             setUploadStatus({ type: "success", message: `Sucessfully uploaded "${variables.file.name}"` });
             queryClient.invalidateQueries({queryKey: ["documents"]});
-            setTimeout(() => setUploadProgress(null), 1000);
+            resetUploadState();
         },
         onError: (error) => {
             let message: string = "";
@@ -78,16 +88,11 @@ export default function Dashboard(){
             } else if (error instanceof Error) message = `An error occurred while uploading (not Axios) "${error.message}".`;
             else message = "An unknown error occurred.";
             setUploadStatus({ type: "error", message: message });
-            setUploadProgress(null);
+            resetUploadState();
         }
     })
 
-    const resetUploadState = () => {
-        setTimeout(() => setUploadProgress(null), 1500);
-        setPendingLocalFile(null);
-        setPendingDriveFile(null);
-        setUploadStatus(null);
-    }
+    
 
     const driveUploadMutation = useMutation({
         mutationFn: documentAPI.uploadFromGoogleDrive,
@@ -106,7 +111,6 @@ export default function Dashboard(){
             } else if (error instanceof Error) message = `An error occurred while uploading (not Axios) "${error.message}".`;
             else message = "An unknown error occurred.";
             setUploadStatus({ type: "error", message: message });
-            setUploadProgress(null);
             resetUploadState();
         }
     });
@@ -118,6 +122,11 @@ export default function Dashboard(){
         // Check whether user is authenticated or not by checking token
         if (!token) {
             setUploadStatus({ type: "warning", message: "You must log in to upload files." });
+            return;
+        }
+
+        if (driveUploadMutation.isPending) {
+            setUploadStatus({ type: "warning", message: "Another upload is in progress. Please wait." });
             return;
         }
 
@@ -135,9 +144,8 @@ export default function Dashboard(){
                 conflict_strategy: "rename"
             })
         }
-        setUploadProgress(0);
-        setUploadStatus(null);
-    }, [uploadMutation, token, documents]);
+        setTimeout(() => setUploadStatus(null), 2000);
+    }, [uploadMutation, token, documents, driveUploadMutation]);
 
     // useDropzone
     const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
@@ -155,7 +163,8 @@ export default function Dashboard(){
             'image/jpeg': ['.jpg', '.jpeg'],
             'image/png': ['.png']
         },
-        multiple: true
+        multiple: true,
+        disabled: driveUploadMutation.isPending
     });
 
     const handleBulkDelete = async () => {
@@ -198,8 +207,7 @@ export default function Dashboard(){
                     conflict_strategy: "rename"
                 });
             }
-            setUploadProgress(0);
-            setUploadStatus(null);
+            setTimeout(() => setUploadStatus(null), 2000);
         }
     }, [documents, driveUploadMutation]);
 

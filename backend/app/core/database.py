@@ -4,7 +4,14 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from app.core.config import settings
 
 # Make connecting engine to PostgreSQL database using the URL from settings
-engine = create_engine(settings.DATABASE_URL, echo=True)
+engine = create_engine(
+    settings.DATABASE_URL, 
+    echo=True,
+    pool_size = 30, # Number of connections to the database
+    max_overflow = 10, # Maximum number of connections that can be added beyond the pool_size
+    pool_timeout = 60, # Maximum number of seconds to wait for a connection
+    pool_recycle = 1800 # Automatically refresh every 30 minutes (1800 seconds)
+)
 
 # Make session class to exchange when call API
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine,expire_on_commit=False)

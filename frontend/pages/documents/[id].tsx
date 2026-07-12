@@ -32,6 +32,7 @@ export default function DocumentDetail() {
         enabled: router.isReady && !!id, // Chỉ gọi API khi ID đã tồn tại trên URL
     });
     console.log("DOCUMENT: ", doc);
+    console.log(`Document filepath: ${doc?.file_path}`);
 
     const handleDeleteToTrash = async () => {
         if (!id) return;

@@ -19,11 +19,12 @@ export default function AllDocuments() {
 
     // Gọi endpoint kết hợp ở backend lấy trọn bộ dữ liệu chưa xóa
     const { data: documents = [], isLoading, isError } = useQuery<DocumentItem[]>({
-        queryKey: ["documents"],
+        queryKey: ["allDocuments"],
         queryFn: async () => {
-        const response = await api.get("/documents/all");
-        return response.data;
-        }
+            const response = await api.get("/documents/all");
+            return response.data;
+        },
+        staleTime: 30000
     });
 
     const handleToggleSelect = (id: number) => {

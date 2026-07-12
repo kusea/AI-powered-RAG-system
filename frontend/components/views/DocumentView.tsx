@@ -11,8 +11,8 @@ interface DocumentViewerProps {
     textContent: string; // Nội dung chữ thô phục vụ backup hoặc hiển thị văn bản
 }
 
-export const DocumentView: React.FC<DocumentViewerProps> = ({fileUrl, fileName, textContent,}) => {
-    const extension = useMemo(() => fileName.split(".").pop()?.toLowerCase(), [fileName]);
+export const DocumentView: React.FC<DocumentViewerProps> = ({fileUrl, fileName, textContent}) => {
+    const extension = useMemo(() => fileUrl.split(".").pop()?.toLowerCase(), [fileUrl]);
     console.log(`Extension: ${extension}`);
     const formatImageUrl = (url: string) => {
             if (!url) return "/";
@@ -24,30 +24,14 @@ export const DocumentView: React.FC<DocumentViewerProps> = ({fileUrl, fileName, 
             return cleanURL;
         };
     const formattedUrl = formatImageUrl(fileUrl);
-    switch (extension) {
-        case "xlsx":
-        case ".xlsx":
-        case "xls":
-        case ".xls":
-        case "csv":
-        case ".csv":
-        return <ExcelViewer fileUrl={formattedUrl} textContent={textContent} />;
-        
-        case "png":
-        case "jpg":
-        case "jpeg":
-        case "gif":
-        case "bmp":
-        return <ImageView fileUrl={formattedUrl} altText={fileName} />;
-        
-        case "pdf":
-        return <PdfView fileUrl={formattedUrl} />;
-        
-        case "docx":
-        return <DocxViewer textContent={textContent} />;
+    const table_ext = ["xlsx", "csv", "xls", ".xlsx", ".csv", ".xls"]
+    const docx_ext = ["docx", "doc", ".docx", ".doc"]
+    const image_ext = ["jpg", "jpeg", "png", ".jpg", ".jpeg", ".png"]
 
-        default:
-        // Các file văn bản thô như .txt, .md hoặc fall-back text từ .docx
-        return <TextView content={textContent} extension={extension} />;
-    }
+    if (!extension) return <TextView content={textContent} extension={extension}/>;
+    if (table_ext.includes(extension)) return <ExcelViewer fileUrl={formattedUrl} textContent={textContent}/>;
+    else if (docx_ext.includes(extension)) return <DocxViewer textContent={textContent} fileUrl={formattedUrl}/>;
+    else if (image_ext.includes(extension)) return <ImageView fileUrl={formattedUrl} altText={fileName}/>;
+    else if (extension === "pdf") return <PdfView fileUrl={formattedUrl}/>;
+    else return <TextView content={textContent} extension={extension}/>;
 };
