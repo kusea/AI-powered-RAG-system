@@ -6,6 +6,7 @@ import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon, Tras
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "./ui/dropdownMenu";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
+import api from "@/services/APIclient";
 
 import { getAuthToken } from "../services/authAPI";
 
@@ -28,7 +29,7 @@ export default function NavBar() {
         queryFn: getAuthToken,
         staleTime: 0
     });
-    const unseenCount = notifications.filter(notification => !notification.seen).length;
+    
     const isLoggedIn = !!token;
 
     const navLinks = [
@@ -62,11 +63,10 @@ export default function NavBar() {
     }, []);
 
     useEffect(() => {
-        /* const tok = (typeof window !== "undefined") ? localStorage.getItem("token") : null;
-        if (!tok || tok === "undefined") {
-            console.warn("Token is not available. Have to delay the SSE connection...." + tok);
+        if (!token || token === "undefined") {
+            console.warn("Token is not available. Have to delay the SSE connection...." + token);
             return;
-        } */
+        }
 
         if (router.pathname === "/login" || router.pathname === "/signup") {
             console.log("Not connecting to SSE on login or signup page.");
@@ -75,6 +75,8 @@ export default function NavBar() {
 
         const API_URL = process.env.NEXT_PUBLIC_API_URL;
         const ctrl = new AbortController();
+
+        let isMounted = true;
         const connectSSE = async () => {
             try {
                 await fetchEventSource(`${API_URL}/notification/stream`, {
@@ -85,41 +87,53 @@ export default function NavBar() {
                     },
                     signal: ctrl.signal,
                     async onopen(response) {
-                        if (response.ok && response.headers.get("Content-Type") === "text/event-stream") {
+                        if (response.ok && response.headers.get("Content-Type")?.includes("text/event-stream")) {
                             console.log("SSE connection opened");
                             return;
                         }
                         if (response.status == 401) {
                             console.warn("Token is expired or invalid. Please login again.");
                             ctrl.abort(); // Abort the SSE connection
-                            localStorage.removeItem("token");
+                            if (typeof window !== "undefined") localStorage.removeItem("token");
+                            queryClient.invalidateQueries({queryKey: ["authToken"]});
                             
                             router.push("/login");
                             throw new Error("Token is expired or invalid. Please login again.");
                         }
                         if (response.status >= 400 && response.status < 500 && response.status !== 429) {
                             ctrl.abort();
-                            throw new Error("SSE connection failed with status " + response.status);
+                            console.log("SSE connection failed with status " + response.status);
                         }
                     },
                     onmessage(event) {
+                        if(!isMounted || !event.data) return;
+
+                        let data = event.data;
+                        if (data.startsWith("data:")) {
+                            data = data.replace("data:", "");
+                        }
                         if (event.data) {
-                            let data = event.data;
-                            if (data.startsWith("data:")) {
-                                data = data.replace("data:", "");
-                            }
                             try {
                                 const newNotif = JSON.parse(data.trim());
-                                console.log(`New notification: ${newNotif.text}`)
-                                if (newNotif.text) {
-                                    const mappedNotif: NotificationItem = {
+                                if (Array.isArray(newNotif)) {
+                                    const mappedNotif: NotificationItem[] = newNotif.map((notification: NotificationItem) => ({
+                                        id: notification.id || Date.now(),
+                                        text: notification.text,
+                                        type: notification.type,
+                                        created_at: notification.created_at,
+                                        seen: notification.seen
+                                    }));
+                                    setNotifications(mappedNotif);
+                                } else if (newNotif && newNotif.text) {
+                                    console.log("New notification: " + newNotif.text);
+                                    const singleNotif: NotificationItem = {
                                         id: newNotif.id || Date.now(),
                                         text: newNotif.text,
                                         type: newNotif.type,
                                         created_at: newNotif.created_at,
-                                        seen: false
+                                        seen: newNotif.seen
                                     }
-                                    setNotifications((prevNotifications) => [mappedNotif, ...prevNotifications]);
+                                    setNotifications((prevNotifications) => [...prevNotifications, singleNotif]);
                                 }
                             } catch (error) {
                                 console.error(`Error parsing SSE data: ${error} with data: ${data}`);
@@ -127,6 +141,10 @@ export default function NavBar() {
                         }
                     },
                     onerror(error) {
+                        if (ctrl.signal.aborted) {
+                            console.warn("SSE connection aborted");
+                            return;
+                        }
                         console.error("SSE connection error: ", error);
                         return;
                     },
@@ -140,17 +158,36 @@ export default function NavBar() {
         };
 
         connectSSE();
-        return () => ctrl.abort();
-    }, [router, token]);
 
-    const handleMarkAsSeen = (id: number) => {
-        setNotifications((prevNotifications) => prevNotifications.map((notification) => notification.id === id ? {...notification, seen: true} : notification));
+        return () => {
+            isMounted = false;
+            ctrl.abort();
+        }
+    }, [router, token, queryClient]);
+
+    const handleMarkAsSeen = async (id: number) => {
+        
+
+        await api.put("/notification/mark-seen", {notification_id: id})
+            .then(() => {
+                setNotifications((prevNotifications) => 
+                    prevNotifications.map((notification) => notification.id === id ? {...notification, seen: true} : notification)
+                );
+                console.log(`Notification marked as seen successfully`);
+            }).catch((error) => console.log(`Error marking notification as seen: ${error}`));
     };
 
-    const handleDeleteNotifications = (e: React.MouseEvent, id: number) => {
+    const handleDeleteNotifications = async (e: React.MouseEvent, id: number) => {
         e.stopPropagation();  // Prevent click event affecting the handleMarkAsSeen function
         setNotifications((prevNotifications) => prevNotifications.filter(notification => notification.id !== id));
+
+        await api.delete("/notification/delete-notification", {data: {notification_id: id}})
+            .then(() => {
+                console.log(`Notification deleted successfully`);
+        }).catch((error) => console.log(`Error deleting notification: ${error}`));
     }
+
+    const unseenCount = notifications.filter(notification => !notification.seen).length;
 
     return (
         <nav className="bg-blue-400 text-white backdrop-blur sticky top-0 z-50 border-b">
