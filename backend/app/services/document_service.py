@@ -483,14 +483,13 @@ def get_user_document(db: Session, user_id: int) -> list[Document]:
     return db.query(Document).filter(Document.user_id == user_id, Document.deleted_at == None).all()
 
 async def get_document_insights(db: Session, document_id: int) -> DocumentInsight:
-    existing_insight = db.query(DocumentInsight).filter(DocumentInsight.document_id == document_id).first()
-    if existing_insight:
-        return existing_insight
-    
     doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found in your account's storage.")
     try: 
+        existing_insight = db.query(DocumentInsight).filter(DocumentInsight.document_id == document_id).first()
+        if existing_insight and len(existing_insight.key_words) > 0:
+            return existing_insight
         insights = await rag_service.generate_document_summary(doc.content)
         saved_insights = DocumentInsight(
             document_id = document_id,
