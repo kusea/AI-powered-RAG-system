@@ -8,16 +8,17 @@ interface DocxViewerProps {
 
 export const DocxViewer: React.FC<DocxViewerProps> = ({ textContent, fileUrl }) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const [loading, setLoading] = useState(!!fileUrl);
+    const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        let isMounted = true; 
         const renderFile = async () => {
             if (!fileUrl) {
                 setLoading(false);
                 return;
             }
-
+        
             try {
                 setLoading(true);
                 setError(null);
@@ -26,18 +27,23 @@ export const DocxViewer: React.FC<DocxViewerProps> = ({ textContent, fileUrl }) 
                 
                 const response = await fetch(fileUrl);
                 if (!response.ok) throw new Error("Can not fetch DOCX document.");
+                console.log("Response status:", response.status);
                 
                 const arrayBuffer = await response.arrayBuffer();
                 
-                if (containerRef.current) {
-                    containerRef.current.innerHTML = ""; // Clear previous content
-                    await docx.renderAsync(arrayBuffer, containerRef.current, undefined, {
-                        className: "docx-render-content",
-                        inWrapper: false,
-                        ignoreWidth: false,
-                        ignoreHeight: false,
-                    });
-                }
+                setTimeout(async () => {
+                    if (isMounted && containerRef.current) {
+                        containerRef.current.innerHTML = ""; // Clear previous content
+                        console.log("Rendering DOCX...");
+                        await docx.renderAsync(arrayBuffer, containerRef.current, undefined, {
+                            className: "docx-render-content",
+                            inWrapper: false,
+                            ignoreWidth: false,
+                            ignoreHeight: false,
+                        });
+                    } 
+                }, 100);
+                
             } catch (err) {
                 console.error("Error rendering DOCX:", err);
                 setError("Error rendering DOCX. Trying to render as plain text.");
@@ -47,6 +53,10 @@ export const DocxViewer: React.FC<DocxViewerProps> = ({ textContent, fileUrl }) 
         };
 
         renderFile();
+
+        return () => {
+            isMounted = false;
+        }
     }, [fileUrl]);
 
     if (loading) {

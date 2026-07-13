@@ -2,7 +2,7 @@ import React, { useState, useEffect} from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient} from "@tanstack/react-query";
 import { useRouter } from "next/router";
-import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon, Trash2, X, FolderOpen} from "lucide-react";
+import { LogOut, Settings, Database, MessageSquare, Share2, Bell, UserIcon, Trash2, X, FolderOpen, LayoutDashboard, Menu } from "lucide-react";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "./ui/dropdownMenu";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
@@ -30,6 +30,13 @@ export default function NavBar() {
     });
     const unseenCount = notifications.filter(notification => !notification.seen).length;
     const isLoggedIn = !!token;
+
+    const navLinks = [
+        {href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="mr-2 h-4 w-4" />},
+        {href: "/chat", label: "Chat", icon: <MessageSquare className="mr-2 h-4 w-4" />},
+        {href: "/documents/all", label: "All Documents", icon: <FolderOpen className="mr-2 h-4 w-4" />},
+        {href: "/share-to-me", label: "Share documents", icon: <Share2 className="mr-2 h-4 w-4" />},
+    ]
 
     const handleLogout = () => {
         localStorage.removeItem("token");
@@ -148,57 +155,48 @@ export default function NavBar() {
     return (
         <nav className="bg-blue-400 text-white backdrop-blur sticky top-0 z-50 border-b">
             <div className="flex h-16 items-center px-6 max-w-7xl justify-between">
-                <div className="flex items-stretch">  
-                    <div className="flex items-center space-x-2 cursor-pointer mr-4"
-                        onClick={() => router.push("/dashboard")}>
-                        <Database className="h-6 w-6 text-primary"/>
-                        <span className="font-bold tracking-tight text-lg text-white">RAG knowledge Hub</span>
+                <div className="flex items-stretch gap-4">
+                {/* 1. KHI MÀN HÌNH NHỎ (< md): Hiện Dropdown điều hướng góc trái */}
+                    <div className="block md:hidden">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-9 w-9">
+                                    <Menu className="h-5 w-5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-48 mt-2">
+                                {navLinks.map((link) => (
+                                    <DropdownMenuItem key={link.href} asChild>
+                                        <Link href={link.href} className={`flex items-center w-full
+                                        ${router.pathname === link.href ? "bg-muted text-foreground" : ""}`}>
+                                            {link.icon}
+                                            <span>{link.label}</span>
+                                        </Link>
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
-                
-                    <nav className="flex h-16">
-                        <button
-                            onClick={() => router.push("/dashboard")}
-                            className={`flex items-center gap-2 px-5 h-full text-sm font-medium transition-colors
-                                ${router.pathname === "/dashboard"
-                                    ? "bg-blue-800 text-white"
-                                    : "text-blue-100 hover:bg-blue-700 hover:text-white"
-                                }`}>
-                            Dashboard
-                        </button>
 
-                        <button
-                            onClick={() => router.push("/documents/all")}
-                            className={`flex items-center gap-2 px-5 h-full text-sm font-medium transition-colors
-                                ${router.pathname === "/documents/all"
-                                    ? "bg-blue-800 text-white"
-                                    : "text-blue-100 hover:bg-blue-700 hover:text-white"
-                                }`}>
-                            <FolderOpen className="h-4 w-4" />
-                            All Documents
-                        </button>
+                    
+                    <Link href="/dashboard" className="hidden md:flex items-center font-bold text-sm tracking-wide text-foreground">
+                        <Database className="h-5 w-5 text-blue-600" />
+                        <span>RAG SYSTEM</span>
+                    </Link>
 
-                        <button
-                            onClick={() => router.push("/chat")}
-                            className={`flex items-center gap-2 px-5 h-full text-sm font-medium transition-colors
-                                ${router.pathname === "/chat"
-                                    ? "bg-blue-800 text-white"
-                                    : "text-blue-100 hover:bg-blue-700 hover:text-white"
-                                }`}>
-                            <MessageSquare className="h-4 w-4" />
-                            AI Assistant
-                        </button>
-                        
-                        <button
-                            onClick={() => router.push("/share-to-me")}
-                            className={`flex items-center gap-2 px-5 h-full text-sm font-medium transition-colors
-                                ${router.pathname === "/share-to-me"
-                                    ? "bg-blue-800 text-white"
-                                    : "text-blue-100 hover:bg-blue-700 hover:text-white"
-                                }`}>
-                            <Share2 className="h-4 w-4" />
-                            Sharing Center
-                        </button>
-                    </nav>
+                    <div className="hidden md:flex items-center">
+                        {navLinks.map((link) => (
+                            <Link
+                                key={link.href}
+                                href={link.href}
+                                className={`flex items-center gap-2 px-5 h-16 text-sm font-medium transition-colors
+                                ${router.pathname === link.href ? "bg-muted/60 text-foreground" : "text-blue-100 hover:bg-blue-700 hover:text-white"}`}
+                            >
+                                {link.icon} 
+                                <span>{link.label}</span>
+                            </Link>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="flex items-center space-x-4 pl-4 text-sm">
