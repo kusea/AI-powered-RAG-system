@@ -166,6 +166,10 @@ Once both the backend and frontend systems are up and running, follow this step-
 - **Uploading Files:** Click on the **Upload** action area. You can drag and drop or select local documents (supported formats: `PDF`, `TXT`, `DOCX`). 
   - *Behind the Scenes:* The backend splits the document using intelligent chunking strategy and stores vector representations directly inside the PostgreSQL database using the `pgvector` extension.
 - **Viewing Documents:** Go to **All Documents** (`/documents/all`) to view a list of your knowledge files. Clicking on a document card opens a dedicated reader view (`/documents/[id]`) that supports inline rendering for PDFs, Markdown text, and document structures.
+**Sharing Documents with Others:** On any document card or within the document viewer, click the **Share** button to open the **Share Modal**.
+  - **Granting Access:** Enter the email address of the target user you wish to share the document with. 
+  - **Collaborative RAG:** Once shared, the recipient can access, read, and query this document's contents within their own RAG chat sessions.
+  - **Revoking Permissions:** You can view the list of users who currently have access within the Share Modal and revoke their permissions at any time, instantly cutting off their access to the document and its vector embeddings.
 - **File Management & Trash:** Deleted files are moved to the **Trash** view (`/documents/trash`), allowing you to either permanently remove them or restore them to your active knowledge base.
 
 ### 3. Intelligent RAG Chat Interaction
